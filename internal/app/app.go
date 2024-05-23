@@ -28,6 +28,11 @@ func (a *app) Run(cfg Config) error {
 
 	log := logrus.New()
 
+	log.Info("running migrations")
+	if err := RunMigrations(cfg.DatabaseDSN, "././internal/migrations"); err != nil {
+		return fmt.Errorf("feiled to run migraions: %w", err)
+	}
+
 	g, ctx := errgroup.WithContext(ctx)
 
 	r := chi.NewRouter()
@@ -39,7 +44,6 @@ func (a *app) Run(cfg Config) error {
 	}
 
 	g.Go(func() error {
-
 		log.Info("starting http server")
 		log.Infof("listen on %s\n", addr)
 		if err := s.ListenAndServe(); err != nil && err != http.ErrServerClosed {
