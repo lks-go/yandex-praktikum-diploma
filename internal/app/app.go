@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/sirupsen/logrus"
@@ -22,7 +21,6 @@ type app struct {
 }
 
 func (a *app) Run(cfg Config) error {
-
 	stopSignal := make(chan os.Signal, 1)
 	signal.Notify(stopSignal, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	ctx, stopApp := context.WithCancel(context.Background())
@@ -33,14 +31,17 @@ func (a *app) Run(cfg Config) error {
 	g, ctx := errgroup.WithContext(ctx)
 
 	r := chi.NewRouter()
+
+	addr := cfg.NetAddress.String()
 	s := http.Server{
-		Addr:    cfg.ServerListenAddr,
+		Addr:    addr,
 		Handler: r,
 	}
 
 	g.Go(func() error {
+
 		log.Info("starting http server")
-		log.Infof("listen on %s\n", cfg.ServerListenAddr)
+		log.Infof("listen on %s\n", addr)
 		if err := s.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			return fmt.Errorf("http server failed: %w", err)
 		}
@@ -74,16 +75,4 @@ func (a *app) Run(cfg Config) error {
 	}
 
 	return nil
-}
-
-type Config struct {
-	ServerListenAddr          string
-	HttpServerShutdownTimeout time.Duration
-}
-
-func (a *app) BuildConfig() (Config, error) {
-	return Config{
-		ServerListenAddr:          ":7000",
-		HttpServerShutdownTimeout: time.Second * 5,
-	}, nil
 }
