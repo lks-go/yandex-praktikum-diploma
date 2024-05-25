@@ -11,6 +11,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/handler"
 )
 
 func New() *app {
@@ -33,15 +35,24 @@ func (a *app) Run(cfg Config) error {
 		return fmt.Errorf("feiled to run migraions: %w", err)
 	}
 
-	g, ctx := errgroup.WithContext(ctx)
+	h := handler.New()
 
 	r := chi.NewRouter()
+	r.Post("/api/user/register", h.RegisterUser)
+	r.Post("/api/user/login", h.LoginUser)
+	r.Post("/api/user/orders", h.SaveOrder)
+	r.Get("/api/user/orders", h.Orders)
+	r.Get("/api/user/balance", h.Balance)
+	r.Post("/api/user/balance/withdraw", h.Withdraw)
+	r.Get("/api/user/withdrawals", h.Withdrawals)
 
 	addr := cfg.NetAddress.String()
 	s := http.Server{
 		Addr:    addr,
 		Handler: r,
 	}
+
+	g, ctx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
 		log.Info("starting http server")
