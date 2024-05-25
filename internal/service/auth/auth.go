@@ -10,6 +10,8 @@ import (
 	"github.com/lks-go/yandex-praktikum-diploma/internal/service"
 )
 
+const CookieName = "auth_token"
+
 type Config struct {
 	TokenSecretKey      string
 	TokenExpirationTime time.Duration
@@ -29,7 +31,7 @@ type Auth struct {
 
 type Claims struct {
 	jwt.RegisteredClaims
-	Login string
+	Login string `json:"login"`
 }
 
 func (t *Auth) BuildNewToken(login string) (string, error) {

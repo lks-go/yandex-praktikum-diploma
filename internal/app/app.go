@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"net/http"
 	"os"
@@ -13,6 +14,11 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/handler"
+	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/storage"
+	"github.com/lks-go/yandex-praktikum-diploma/internal/service"
+	"github.com/lks-go/yandex-praktikum-diploma/internal/service/auth"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func New() *app {
@@ -35,7 +41,23 @@ func (a *app) Run(cfg Config) error {
 		return fmt.Errorf("feiled to run migraions: %w", err)
 	}
 
-	h := handler.New()
+	log.Info("setup db")
+	pool, err := setupDB(cfg.DatabaseDSN)
+	if err != nil {
+		return fmt.Errorf("failed to setup DB: %w", err)
+	}
+
+	tokenBuilder := auth.New(&auth.Config{})
+
+	store := storage.New(pool)
+
+	serviceDeps := service.Deps{
+		UserStorage:  store,
+		TokenBuilder: tokenBuilder,
+	}
+	service := service.New(&service.Config{}, &serviceDeps)
+
+	h := handler.New(log, service)
 
 	r := chi.NewRouter()
 	r.Post("/api/user/register", h.RegisterUser)
@@ -90,4 +112,17 @@ func (a *app) Run(cfg Config) error {
 	}
 
 	return nil
+}
+
+func setupDB(dsn string) (*sql.DB, error) {
+	pool, err := sql.Open("pgx", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open database connection: %w", err)
+	}
+
+	if err := pool.Ping(); err != nil {
+		return nil, fmt.Errorf("failed to ping database after connect: %w", err)
+	}
+
+	return pool, nil
 }
