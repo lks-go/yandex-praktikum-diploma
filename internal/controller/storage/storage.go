@@ -21,11 +21,17 @@ type Storage struct {
 	db *sql.DB
 }
 
-func (s *Storage) AddUser(ctx context.Context, login string, password string) (string, error) {
-	q := `INSERT INTO users (login, password) VALUES ($1, $2) RETURNING id`
+type user struct {
+	ID           string
+	Login        string
+	PasswordHash string
+}
+
+func (s *Storage) AddUser(ctx context.Context, login string, passwordHash string) (string, error) {
+	q := `INSERT INTO users (login, password_hash) VALUES ($1, $2) RETURNING id`
 
 	id := ""
-	err := s.db.QueryRowContext(ctx, q, login, password).Scan(&id)
+	err := s.db.QueryRowContext(ctx, q, login, passwordHash).Scan(&id)
 	if err != nil {
 		if err, ok := err.(*pgconn.PgError); ok {
 			if err.Code == pgerrcode.UniqueViolation {
@@ -37,4 +43,24 @@ func (s *Storage) AddUser(ctx context.Context, login string, password string) (s
 	}
 
 	return id, nil
+}
+
+func (s *Storage) UserByLogin(ctx context.Context, login string) (*service.User, error) {
+	q := `SELECT login, password_hash FROM users WHERE login = $1;`
+
+	u := user{}
+	if err := s.db.QueryRowContext(ctx, q, login).Scan(&u.Login, &u.PasswordHash); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, service.ErrUserNotFound
+		}
+
+		return nil, fmt.Errorf("query row error: %w", err)
+	}
+
+	su := service.User{
+		Login:        u.Login,
+		PasswordHash: u.PasswordHash,
+	}
+
+	return &su, nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 
@@ -14,7 +15,8 @@ import (
 )
 
 type Service interface {
-	RegisterUser(ctx context.Context, login string, password string) (string, error)
+	RegisterUser(ctx context.Context, login string, password string) (token string, err error)
+	AuthUser(ctx context.Context, login string, password string) (token string, err error)
 }
 
 func New(log *logrus.Logger, s Service) *Handler {
@@ -42,8 +44,8 @@ func (h *Handler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	requestBody := struct {
-		Login    string `json:"login"`
-		Password string `json:"password"`
+		Login    *string `json:"login,omitempty"`
+		Password *string `json:"password,omitempty"`
 	}{}
 
 	if err := json.Unmarshal(bodyBytes, &requestBody); err != nil {
@@ -52,9 +54,28 @@ func (h *Handler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	validationErrors := make([]error, 0)
+
+	if err := validateLogin(requestBody.Login); err != nil {
+		validationErrors = append(validationErrors, err)
+	}
+
+	if err := validatePassword(requestBody.Login); err != nil {
+		validationErrors = append(validationErrors, err)
+	}
+
+	if len(validationErrors) > 0 {
+		for _, e := range validationErrors {
+			l.Warnf("login not valid: %s", e)
+		}
+
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
 	errAuth := service.ErrAuth{}
 
-	authToken, err := h.service.RegisterUser(r.Context(), requestBody.Login, requestBody.Password)
+	authToken, err := h.service.RegisterUser(r.Context(), *requestBody.Login, *requestBody.Password)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrUserAlreadyExists):
@@ -81,7 +102,77 @@ func (h *Handler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) LoginUser(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	l := h.log.WithField("handler", "LoginUser")
 
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		l.Errorf("failed to read request body: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	requestBody := struct {
+		Login    *string `json:"login,omitempty"`
+		Password *string `json:"password,omitempty"`
+	}{}
+
+	if err := json.Unmarshal(bodyBytes, &requestBody); err != nil {
+		l.Errorf("failed to unmarshal request body: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	validationErrors := make([]error, 0)
+
+	if err := validateLogin(requestBody.Login); err != nil {
+		validationErrors = append(validationErrors, err)
+	}
+
+	if err := validatePassword(requestBody.Password); err != nil {
+		validationErrors = append(validationErrors, err)
+	}
+
+	if len(validationErrors) > 0 {
+		for _, e := range validationErrors {
+			l.Warnf("login not valid: %s", e)
+		}
+
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	errAuth := service.ErrAuth{}
+
+	authToken, err := h.service.AuthUser(r.Context(), *requestBody.Login, *requestBody.Password)
+	if err != nil {
+		switch {
+		case errors.As(err, &errAuth):
+			l.Errorf("failed to login user: %s", errAuth)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		case errors.Is(err, service.ErrUserNotFound):
+			l.Warnf("failed to login user: %s", err)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		case errors.Is(err, service.ErrUsersPasswordNotMatch):
+			l.Warn(err)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		default:
+			l.Errorf("failed to auth user: %s", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	}
+
+	newCookie := http.Cookie{
+		Name:  auth.CookieName,
+		Value: authToken,
+	}
+
+	http.SetCookie(w, &newCookie)
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *Handler) SaveOrder(w http.ResponseWriter, r *http.Request) {
@@ -102,4 +193,20 @@ func (h *Handler) Withdraw(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) Withdrawals(w http.ResponseWriter, r *http.Request) {
 
+}
+
+func validateLogin(login *string) error {
+	if login == nil || *login == "" {
+		return fmt.Errorf("login must not be empty")
+	}
+
+	return nil
+}
+
+func validatePassword(pass *string) error {
+	if pass == nil || *pass == "" {
+		return fmt.Errorf("password must not be empty")
+	}
+
+	return nil
 }

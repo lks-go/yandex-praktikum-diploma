@@ -25,6 +25,16 @@ func New() *app {
 	return &app{}
 }
 
+type HTTPHandler interface {
+	RegisterUser(w http.ResponseWriter, r *http.Request)
+	LoginUser(w http.ResponseWriter, r *http.Request)
+	SaveOrder(w http.ResponseWriter, r *http.Request)
+	Orders(w http.ResponseWriter, r *http.Request)
+	Balance(w http.ResponseWriter, r *http.Request)
+	Withdraw(w http.ResponseWriter, r *http.Request)
+	Withdrawals(w http.ResponseWriter, r *http.Request)
+}
+
 type app struct {
 }
 
@@ -38,7 +48,7 @@ func (a *app) Run(cfg Config) error {
 
 	log.Info("running migrations")
 	if err := RunMigrations(cfg.DatabaseDSN, "././internal/migrations"); err != nil {
-		return fmt.Errorf("feiled to run migraions: %w", err)
+		return fmt.Errorf("failed to run migraions: %w", err)
 	}
 
 	log.Info("setup db")
@@ -57,7 +67,8 @@ func (a *app) Run(cfg Config) error {
 	}
 	service := service.New(&service.Config{}, &serviceDeps)
 
-	h := handler.New(log, service)
+	var h HTTPHandler
+	h = handler.New(log, service)
 
 	r := chi.NewRouter()
 	r.Post("/api/user/register", h.RegisterUser)
