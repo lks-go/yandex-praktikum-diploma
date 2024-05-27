@@ -14,11 +14,12 @@ type UserStorage interface {
 }
 
 type OrderStorage interface {
+	OrderByNumber(ctx context.Context, orderNumber string) (order *Order, err error)
 	AddOrder(ctx context.Context, login string, orderNumber string) (oderID string, err error)
 }
 
 type OrderProcessPublisher interface {
-	Publish(ctx context.Context, msg OrderMessage)
+	Publish(ctx context.Context, msg OrderEvent)
 }
 
 type TokenBuilder interface {
@@ -87,15 +88,41 @@ func (s *Service) AuthUser(ctx context.Context, login string, password string) (
 }
 
 func (s *Service) SaveOrder(ctx context.Context, login string, orderNumber string) error {
-	orderID, err := s.orderStorage.AddOrder(ctx, login, orderNumber)
+
+	user, err := s.userStorage.UserByLogin(ctx, login)
 	if err != nil {
 		switch {
+		case errors.Is(err, ErrUserNotFound):
+			return ErrUserNotFound
 		default:
-			return fmt.Errorf("failed to add order to storage: %w", err)
+			return fmt.Errorf("failed to get user by login: %w", err)
 		}
 	}
 
-	go s.orderProcessPublisher.Publish(ctx, OrderMessage{
+	if user == nil {
+		return fmt.Errorf("something went wrong: user is empty")
+	}
+
+	order, err := s.orderStorage.OrderByNumber(ctx, orderNumber)
+	if err != nil && !errors.Is(err, ErrOrderNotFound) {
+		return fmt.Errorf("failed to get order by number: %w", err)
+	}
+
+	if order != nil {
+		switch {
+		case order.UserID == user.ID:
+			return ErrOrderAlreadyExists
+		case order.UserID != user.ID:
+			return ErrOrderConflict
+		}
+	}
+
+	orderID, err := s.orderStorage.AddOrder(ctx, login, orderNumber)
+	if err != nil {
+		return fmt.Errorf("failed to add order: %w", err)
+	}
+
+	go s.orderProcessPublisher.Publish(ctx, OrderEvent{
 		Login:   login,
 		OrderID: orderID,
 	})

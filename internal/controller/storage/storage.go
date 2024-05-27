@@ -46,10 +46,10 @@ func (s *Storage) AddUser(ctx context.Context, login string, passwordHash string
 }
 
 func (s *Storage) UserByLogin(ctx context.Context, login string) (*service.User, error) {
-	q := `SELECT login, password_hash FROM users WHERE login = $1;`
+	q := `SELECT id, login, password_hash FROM users WHERE login = $1;`
 
 	u := user{}
-	if err := s.db.QueryRowContext(ctx, q, login).Scan(&u.Login, &u.PasswordHash); err != nil {
+	if err := s.db.QueryRowContext(ctx, q, login).Scan(&u.ID, &u.Login, &u.PasswordHash); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, service.ErrUserNotFound
 		}
@@ -58,6 +58,7 @@ func (s *Storage) UserByLogin(ctx context.Context, login string) (*service.User,
 	}
 
 	su := service.User{
+		ID:           u.ID,
 		Login:        u.Login,
 		PasswordHash: u.PasswordHash,
 	}

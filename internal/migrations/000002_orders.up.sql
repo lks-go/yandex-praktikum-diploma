@@ -3,9 +3,9 @@ CREATE TYPE order_status AS ENUM ('REGISTERED', 'INVALID', 'PROCESSING', 'PROCES
 CREATE TABLE orders (
     id UUID NOT NULL PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL,
-    number VARCHAR(15),
-    status order_status,
-    accrual INTEGER,
+    number VARCHAR UNIQUE NOT NULL,
+    status order_status NOT NULL,
+    accrual INTEGER NOT NULL,
     uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
