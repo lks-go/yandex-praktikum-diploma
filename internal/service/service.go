@@ -15,7 +15,7 @@ type UserStorage interface {
 
 type OrderStorage interface {
 	OrderByNumber(ctx context.Context, orderNumber string) (order *Order, err error)
-	AddOrder(ctx context.Context, login string, orderNumber string) (oderID string, err error)
+	AddOrder(ctx context.Context, o Order) (oderID string, err error)
 }
 
 type OrderProcessPublisher interface {
@@ -32,6 +32,7 @@ type Config struct {
 
 type Deps struct {
 	UserStorage  UserStorage
+	OrderStorage OrderStorage
 	TokenBuilder TokenBuilder
 }
 
@@ -39,6 +40,7 @@ func New(cfg *Config, d *Deps) *Service {
 	return &Service{
 		cfg:          cfg,
 		userStorage:  d.UserStorage,
+		orderStorage: d.OrderStorage,
 		tokenBuilder: d.TokenBuilder,
 	}
 }
@@ -88,7 +90,6 @@ func (s *Service) AuthUser(ctx context.Context, login string, password string) (
 }
 
 func (s *Service) SaveOrder(ctx context.Context, login string, orderNumber string) error {
-
 	user, err := s.userStorage.UserByLogin(ctx, login)
 	if err != nil {
 		switch {
@@ -117,7 +118,13 @@ func (s *Service) SaveOrder(ctx context.Context, login string, orderNumber strin
 		}
 	}
 
-	orderID, err := s.orderStorage.AddOrder(ctx, login, orderNumber)
+	newOrder := Order{
+		UserID: user.ID,
+		Number: orderNumber,
+		Status: Registered,
+	}
+
+	orderID, err := s.orderStorage.AddOrder(ctx, newOrder)
 	if err != nil {
 		return fmt.Errorf("failed to add order: %w", err)
 	}

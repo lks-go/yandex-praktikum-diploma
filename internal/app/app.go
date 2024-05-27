@@ -15,7 +15,8 @@ import (
 
 	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/handler"
 	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/middleware"
-	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/storage"
+	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/storage/order"
+	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/storage/user"
 	"github.com/lks-go/yandex-praktikum-diploma/internal/service"
 	"github.com/lks-go/yandex-praktikum-diploma/internal/service/auth"
 
@@ -60,10 +61,12 @@ func (a *app) Run(cfg Config) error {
 
 	authorisation := auth.New(&auth.Config{})
 
-	store := storage.New(pool)
+	userStorage := user.New(pool)
+	orderStorage := order.New(pool)
 
 	serviceDeps := service.Deps{
-		UserStorage:  store,
+		UserStorage:  userStorage,
+		OrderStorage: orderStorage,
 		TokenBuilder: authorisation,
 	}
 	service := service.New(&service.Config{}, &serviceDeps)
