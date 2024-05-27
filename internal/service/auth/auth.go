@@ -10,7 +10,10 @@ import (
 	"github.com/lks-go/yandex-praktikum-diploma/internal/service"
 )
 
-const CookieName = "auth_token"
+const (
+	CookieName      = "auth_token"
+	LoginHeaderName = "Login"
+)
 
 type Config struct {
 	TokenSecretKey      string

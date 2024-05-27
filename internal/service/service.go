@@ -13,6 +13,14 @@ type UserStorage interface {
 	AddUser(ctx context.Context, login string, passwordHash string) (string, error)
 }
 
+type OrderStorage interface {
+	AddOrder(ctx context.Context, login string, orderNumber string) (oderID string, err error)
+}
+
+type OrderProcessPublisher interface {
+	Publish(ctx context.Context, msg OrderMessage)
+}
+
 type TokenBuilder interface {
 	BuildNewToken(login string) (string, error)
 }
@@ -35,9 +43,11 @@ func New(cfg *Config, d *Deps) *Service {
 }
 
 type Service struct {
-	cfg          *Config
-	userStorage  UserStorage
-	tokenBuilder TokenBuilder
+	cfg                   *Config
+	userStorage           UserStorage
+	orderStorage          OrderStorage
+	tokenBuilder          TokenBuilder
+	orderProcessPublisher OrderProcessPublisher
 }
 
 func (s *Service) RegisterUser(ctx context.Context, login string, password string) (string, error) {
@@ -74,6 +84,23 @@ func (s *Service) AuthUser(ctx context.Context, login string, password string) (
 	}
 
 	return authToken, nil
+}
+
+func (s *Service) SaveOrder(ctx context.Context, login string, orderNumber string) error {
+	orderID, err := s.orderStorage.AddOrder(ctx, login, orderNumber)
+	if err != nil {
+		switch {
+		default:
+			return fmt.Errorf("failed to add order to storage: %w", err)
+		}
+	}
+
+	go s.orderProcessPublisher.Publish(ctx, OrderMessage{
+		Login:   login,
+		OrderID: orderID,
+	})
+
+	return nil
 }
 
 func (s *Service) hashPassword(pass string) string {

@@ -14,6 +14,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/handler"
+	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/middleware"
 	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/storage"
 	"github.com/lks-go/yandex-praktikum-diploma/internal/service"
 	"github.com/lks-go/yandex-praktikum-diploma/internal/service/auth"
@@ -57,20 +58,25 @@ func (a *app) Run(cfg Config) error {
 		return fmt.Errorf("failed to setup DB: %w", err)
 	}
 
-	tokenBuilder := auth.New(&auth.Config{})
+	authorisation := auth.New(&auth.Config{})
 
 	store := storage.New(pool)
 
 	serviceDeps := service.Deps{
 		UserStorage:  store,
-		TokenBuilder: tokenBuilder,
+		TokenBuilder: authorisation,
 	}
 	service := service.New(&service.Config{}, &serviceDeps)
+
+	mw := middleware.New(authorisation)
 
 	var h HTTPHandler
 	h = handler.New(log, service)
 
 	r := chi.NewRouter()
+
+	r.Use(mw.CheckAuth)
+
 	r.Post("/api/user/register", h.RegisterUser)
 	r.Post("/api/user/login", h.LoginUser)
 	r.Post("/api/user/orders", h.SaveOrder)
