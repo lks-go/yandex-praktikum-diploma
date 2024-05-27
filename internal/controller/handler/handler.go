@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/ShiraazMoollatjie/goluhn"
 	"github.com/sirupsen/logrus"
 
 	"github.com/lks-go/yandex-praktikum-diploma/internal/service"
@@ -17,6 +18,7 @@ import (
 type Service interface {
 	RegisterUser(ctx context.Context, login string, password string) (token string, err error)
 	AuthUser(ctx context.Context, login string, password string) (token string, err error)
+	SaveOrder(ctx context.Context, login string, orderNumber string) error
 }
 
 func New(log *logrus.Logger, s Service) *Handler {
@@ -176,7 +178,40 @@ func (h *Handler) LoginUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) SaveOrder(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	l := h.log.WithField("handler", "SaveOrder")
 
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		l.Errorf("failed to read request body: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	requestBody := string(bodyBytes)
+	if err := validateOrderNumber(requestBody); err != nil {
+		l.Warnf("invalid order number: %s", err)
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		return
+	}
+
+	err = h.service.SaveOrder(r.Context(), r.Header.Get(auth.LoginHeaderName), requestBody)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrOrderAlreadyExists):
+			w.WriteHeader(http.StatusOK)
+			return
+		case errors.Is(err, service.ErrOrderConflict):
+			w.WriteHeader(http.StatusConflict)
+			return
+		default:
+			l.Errorf("failed to save order: %s", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	}
+
+	w.WriteHeader(http.StatusAccepted)
 }
 
 func (h *Handler) Orders(w http.ResponseWriter, r *http.Request) {
@@ -206,6 +241,15 @@ func validateLogin(login *string) error {
 func validatePassword(pass *string) error {
 	if pass == nil || *pass == "" {
 		return fmt.Errorf("password must not be empty")
+	}
+
+	return nil
+}
+
+func validateOrderNumber(orderNumber string) error {
+	err := goluhn.Validate(orderNumber)
+	if err != nil {
+		return err
 	}
 
 	return nil
