@@ -34,7 +34,7 @@ type order struct {
 }
 
 func (s *Storage) OrderByNumber(ctx context.Context, orderNumber string) (*service.Order, error) {
-	q := `SELECT id, user_id, order_number, status, accrual  FROM orders WHERE number = $1;`
+	q := `SELECT id, user_id, order_number, status, calc  FROM orders WHERE number = $1;`
 
 	o := order{}
 	err := s.db.QueryRowContext(ctx, q, orderNumber).Scan(&o.ID, &o.UserID, &o.Number, &o.Status, &o.Accrual)
@@ -58,8 +58,8 @@ func (s *Storage) OrderByNumber(ctx context.Context, orderNumber string) (*servi
 
 }
 
-func (s *Storage) AddOrder(ctx context.Context, o service.Order) (string, error) {
-	q := `INSERT INTO orders (user_id, order_number, status, accrual) VALUES ($1, $2) RETURNING id`
+func (s *Storage) AddOrder(ctx context.Context, o *service.Order) (string, error) {
+	q := `INSERT INTO orders (user_id, order_number, status, calc) VALUES ($1, $2) RETURNING id`
 
 	id := ""
 	err := s.db.QueryRowContext(ctx, q, o.UserID, o.Number, o.Status, o.Accrual).Scan(&id)
@@ -74,4 +74,24 @@ func (s *Storage) AddOrder(ctx context.Context, o service.Order) (string, error)
 	}
 
 	return id, nil
+}
+
+func (s *Storage) UpdateOrder(ctx context.Context, o *service.Order) error {
+	q := `UPDATE orders SET status = $2,  accrual = $3 WHERE number = $1`
+
+	res, err := s.db.ExecContext(ctx, q, o.Number, o.Status, o.Accrual)
+	if err != nil {
+		return fmt.Errorf("failed to exec query: %w", err)
+	}
+
+	cnt, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get affected rows: %w", err)
+	}
+
+	if cnt == 0 {
+		return fmt.Errorf("something went wrong, %d affected row", cnt)
+	}
+
+	return nil
 }

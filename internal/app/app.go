@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -13,10 +14,13 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/calc"
 	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/handler"
 	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/middleware"
+	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/publisher"
 	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/storage/order"
 	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/storage/user"
+	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/subscriber"
 	"github.com/lks-go/yandex-praktikum-diploma/internal/service"
 	"github.com/lks-go/yandex-praktikum-diploma/internal/service/auth"
 
@@ -63,13 +67,25 @@ func (a *app) Run(cfg Config) error {
 
 	userStorage := user.New(pool)
 	orderStorage := order.New(pool)
+	pub, queue := publisher.New()
+	defer pub.Close()
+
+	accrualConfig := calc.Config{HostURL: cfg.NetAddress.String(), RetryCount: 3}
 
 	serviceDeps := service.Deps{
 		UserStorage:  userStorage,
 		OrderStorage: orderStorage,
 		TokenBuilder: authorisation,
+		Calculator:   calc.NewHTTPClient(&accrualConfig),
 	}
 	service := service.New(&service.Config{}, &serviceDeps)
+
+	subscriberDeps := subscriber.Deps{
+		Log:    log,
+		Queue:  queue,
+		Handle: service.GetOrderAccrual,
+	}
+	sub := subscriber.New(&subscriberDeps)
 
 	mw := middleware.New(authorisation)
 
@@ -95,6 +111,16 @@ func (a *app) Run(cfg Config) error {
 	}
 
 	g, ctx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		log.Info("starting subscriber")
+		if err := sub.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			log.Errorf("subscriber filed: %s", err)
+		}
+		log.Info("subscriber stopped")
+
+		return nil
+	})
 
 	g.Go(func() error {
 		log.Info("starting http server")

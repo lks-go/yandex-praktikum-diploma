@@ -13,6 +13,10 @@ var (
 	ErrOrderNotFound         = errors.New("order not found")
 	ErrOrderAlreadyExists    = errors.New("order already exists")
 	ErrOrderConflict         = errors.New("order already exists")
+
+	ErrThirdPartyOrderNotRegistered = errors.New("third party order not registered")
+	ErrThirdPartyToManyRequests     = errors.New("third party to many requests")
+	ErrThirdPartyInternal           = errors.New("third party internal error")
 )
 
 type ErrAuth struct {
@@ -48,7 +52,6 @@ type Order struct {
 }
 
 type OrderEvent struct {
-	Login   string
-	OrderID string
-	Attempt int32
+	OrderNumber string
+	Attempt     int32
 }

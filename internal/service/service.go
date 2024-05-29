@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"time"
 )
 
 type UserStorage interface {
@@ -15,7 +16,8 @@ type UserStorage interface {
 
 type OrderStorage interface {
 	OrderByNumber(ctx context.Context, orderNumber string) (order *Order, err error)
-	AddOrder(ctx context.Context, o Order) (oderID string, err error)
+	AddOrder(ctx context.Context, o *Order) (oderID string, err error)
+	UpdateOrder(ctx context.Context, o *Order) error
 }
 
 type OrderProcessPublisher interface {
@@ -26,22 +28,39 @@ type TokenBuilder interface {
 	BuildNewToken(login string) (string, error)
 }
 
+type Calculator interface {
+	Accrual(ctx context.Context, orderNumber string) (*Order, error)
+}
+
 type Config struct {
-	PassHashSalt string
+	PassHashSalt      string
+	MaxRepublishCount int32
+	RepublishWaitTime time.Duration
 }
 
 type Deps struct {
-	UserStorage  UserStorage
-	OrderStorage OrderStorage
-	TokenBuilder TokenBuilder
+	UserStorage           UserStorage
+	OrderStorage          OrderStorage
+	TokenBuilder          TokenBuilder
+	OrderProcessPublisher OrderProcessPublisher
+	Calculator            Calculator
 }
 
 func New(cfg *Config, d *Deps) *Service {
+	if cfg.MaxRepublishCount <= 0 {
+		cfg.MaxRepublishCount = 3
+	}
+
+	if cfg.RepublishWaitTime <= 0 {
+		cfg.RepublishWaitTime = time.Second * 3
+	}
+
 	return &Service{
-		cfg:          cfg,
-		userStorage:  d.UserStorage,
-		orderStorage: d.OrderStorage,
-		tokenBuilder: d.TokenBuilder,
+		cfg:                   cfg,
+		userStorage:           d.UserStorage,
+		orderStorage:          d.OrderStorage,
+		tokenBuilder:          d.TokenBuilder,
+		orderProcessPublisher: d.OrderProcessPublisher,
 	}
 }
 
@@ -51,6 +70,7 @@ type Service struct {
 	orderStorage          OrderStorage
 	tokenBuilder          TokenBuilder
 	orderProcessPublisher OrderProcessPublisher
+	calculator            Calculator
 }
 
 func (s *Service) RegisterUser(ctx context.Context, login string, password string) (string, error) {
@@ -124,15 +144,52 @@ func (s *Service) SaveOrder(ctx context.Context, login string, orderNumber strin
 		Status: Registered,
 	}
 
-	orderID, err := s.orderStorage.AddOrder(ctx, newOrder)
+	orderID, err := s.orderStorage.AddOrder(ctx, &newOrder)
 	if err != nil {
 		return fmt.Errorf("failed to add order: %w", err)
 	}
 
 	go s.orderProcessPublisher.Publish(ctx, OrderEvent{
-		Login:   login,
-		OrderID: orderID,
+		OrderNumber: orderID,
 	})
+
+	return nil
+}
+
+func (s *Service) GetOrderAccrual(ctx context.Context, event OrderEvent) error {
+	needRepublish := false
+
+	accOrder, err := s.calculator.Accrual(ctx, event.OrderNumber)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrThirdPartyOrderNotRegistered),
+			errors.Is(err, ErrThirdPartyToManyRequests),
+			errors.Is(err, ErrThirdPartyInternal):
+			needRepublish = true
+		default:
+			return fmt.Errorf("failed to accrual order: %w", err)
+		}
+	}
+
+	if needRepublish {
+		if event.Attempt >= s.cfg.MaxRepublishCount {
+			return fmt.Errorf("event republish limit is over")
+		}
+
+		go func() {
+			time.Sleep(s.cfg.RepublishWaitTime)
+			s.orderProcessPublisher.Publish(ctx, OrderEvent{
+				OrderNumber: event.OrderNumber,
+				Attempt:     event.Attempt + 1,
+			})
+		}()
+
+		return nil
+	}
+
+	if err := s.orderStorage.UpdateOrder(ctx, accOrder); err != nil {
+		return fmt.Errorf("failed to update order [number %s]: %w", accOrder.Number, err)
+	}
 
 	return nil
 }
