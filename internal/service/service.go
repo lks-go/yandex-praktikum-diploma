@@ -18,6 +18,7 @@ type OrderStorage interface {
 	OrderByNumber(ctx context.Context, orderNumber string) (order *Order, err error)
 	AddOrder(ctx context.Context, o *Order) (oderID string, err error)
 	UpdateOrder(ctx context.Context, o *Order) error
+	UsersOrders(ctx context.Context, userId string) ([]Order, error)
 }
 
 type OrderProcessPublisher interface {
@@ -156,7 +157,7 @@ func (s *Service) SaveOrder(ctx context.Context, login string, orderNumber strin
 	return nil
 }
 
-func (s *Service) GetOrderAccrual(ctx context.Context, event OrderEvent) error {
+func (s *Service) OrderAccrual(ctx context.Context, event OrderEvent) error {
 	needRepublish := false
 
 	accOrder, err := s.calculator.Accrual(ctx, event.OrderNumber)
@@ -192,6 +193,20 @@ func (s *Service) GetOrderAccrual(ctx context.Context, event OrderEvent) error {
 	}
 
 	return nil
+}
+
+func (s *Service) OrderList(ctx context.Context, login string) ([]Order, error) {
+	user, err := s.userStorage.UserByLogin(ctx, login)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user by login [%s]: %w", login, err)
+	}
+
+	orders, err := s.orderStorage.UsersOrders(ctx, user.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get orders: %w", err)
+	}
+
+	return orders, nil
 }
 
 func (s *Service) hashPassword(pass string) string {

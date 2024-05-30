@@ -19,6 +19,7 @@ type Service interface {
 	RegisterUser(ctx context.Context, login string, password string) (token string, err error)
 	AuthUser(ctx context.Context, login string, password string) (token string, err error)
 	SaveOrder(ctx context.Context, login string, orderNumber string) error
+	OrderList(ctx context.Context, login string) ([]service.Order, error)
 }
 
 func New(log *logrus.Logger, s Service) *Handler {
@@ -215,7 +216,59 @@ func (h *Handler) SaveOrder(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Orders(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	l := h.log.WithField("handler", "Orders")
 
+	orderList, err := h.service.OrderList(r.Context(), r.Header.Get(auth.LoginHeaderName))
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrOrderNotFound):
+			w.WriteHeader(http.StatusNoContent)
+			return
+		default:
+			l.Errorf("failed to get order list: %s", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	}
+
+	type orderDTO struct {
+		Number     string `json:"number"`
+		Status     string `json:"status"`
+		Accrual    *int   `json:"accrual,omitempty"`
+		UploadedAt string `json:"uploaded_at"`
+	}
+
+	orders := make([]orderDTO, 0, len(orderList))
+
+	for _, o := range orderList {
+		order := orderDTO{
+			Number:     o.Number,
+			Status:     string(o.Status),
+			UploadedAt: o.UploadedAt,
+		}
+
+		if o.Accrual > 0 {
+			*order.Accrual = o.Accrual
+		}
+
+		orders = append(orders, order)
+	}
+
+	body, err := json.Marshal(orders)
+	if err != nil {
+		l.Errorf("failed to marshal order list: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if _, err := w.Write(body); err != nil {
+		l.Errorf("failed to write body: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *Handler) Balance(w http.ResponseWriter, r *http.Request) {

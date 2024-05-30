@@ -83,7 +83,7 @@ func (a *app) Run(cfg Config) error {
 	subscriberDeps := subscriber.Deps{
 		Log:    log,
 		Queue:  queue,
-		Handle: service.GetOrderAccrual,
+		Handle: service.OrderAccrual,
 	}
 	sub := subscriber.New(&subscriberDeps)
 

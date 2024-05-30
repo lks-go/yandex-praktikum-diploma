@@ -44,11 +44,12 @@ const (
 )
 
 type Order struct {
-	ID      string
-	UserID  string
-	Number  string
-	Status  OrderStatus
-	Accrual int
+	ID         string
+	UserID     string
+	Number     string
+	Status     OrderStatus
+	Accrual    int
+	UploadedAt string
 }
 
 type OrderEvent struct {

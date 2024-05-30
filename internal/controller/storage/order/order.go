@@ -95,3 +95,46 @@ func (s *Storage) UpdateOrder(ctx context.Context, o *service.Order) error {
 
 	return nil
 }
+
+func (s *Storage) UsersOrders(ctx context.Context, userId string) ([]service.Order, error) {
+	q := `SELECT id, user_id, order_number, status, accrual  FROM orders WHERE user_id = $1;`
+
+	row, err := s.db.QueryContext(ctx, q, userId)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, service.ErrOrderNotFound
+		}
+		return nil, fmt.Errorf("failed to more query: %w", err)
+	}
+	defer row.Close()
+
+	type ord struct {
+		ID      string
+		UserID  string
+		Number  string
+		Status  string
+		Accrual int
+	}
+
+	orders := make([]service.Order, 0)
+	for row.Next() {
+		o := ord{}
+		if err := row.Scan(&o.ID, &o.UserID, &o.Number, &o.Status, &o.Accrual); err != nil {
+			return nil, fmt.Errorf("failed to scan order: %w", err)
+		}
+
+		orders = append(orders, service.Order{
+			ID:      o.ID,
+			UserID:  o.UserID,
+			Number:  o.Number,
+			Status:  service.OrderStatus(o.Status),
+			Accrual: o.Accrual,
+		})
+	}
+
+	if err := row.Err(); err != nil {
+		return nil, fmt.Errorf("rows fail: %w", err)
+	}
+
+	return orders, nil
+}
