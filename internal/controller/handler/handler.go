@@ -20,6 +20,7 @@ type Service interface {
 	AuthUser(ctx context.Context, login string, password string) (token string, err error)
 	SaveOrder(ctx context.Context, login string, orderNumber string) error
 	OrderList(ctx context.Context, login string) ([]service.Order, error)
+	UserBalance(ctx context.Context, login string) (*service.UserBalance, error)
 }
 
 func New(log *logrus.Logger, s Service) *Handler {
@@ -272,7 +273,41 @@ func (h *Handler) Orders(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Balance(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	l := h.log.WithField("handler", "Balance")
 
+	userBalance, err := h.service.UserBalance(r.Context(), r.Header.Get(auth.LoginHeaderName))
+	if err != nil {
+		l.Errorf("failed to get user balance: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if userBalance == nil {
+		l.Errorf("something went wrong, userBalance is nil")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	type dto struct {
+		Current   float64 `json:"current"`
+		Withdrawn float64 `json:"withdrawn"`
+	}
+
+	body, err := json.Marshal(dto(*userBalance))
+	if err != nil {
+		l.Errorf("failed to marshal order list: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if _, err := w.Write(body); err != nil {
+		l.Errorf("failed to write body: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *Handler) Withdraw(w http.ResponseWriter, r *http.Request) {

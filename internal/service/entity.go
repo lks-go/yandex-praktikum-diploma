@@ -56,3 +56,8 @@ type OrderEvent struct {
 	OrderNumber string
 	Attempt     int32
 }
+
+type UserBalance struct {
+	Current   float64
+	Withdrawn float64
+}

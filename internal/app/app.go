@@ -18,6 +18,7 @@ import (
 	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/handler"
 	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/middleware"
 	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/publisher"
+	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/storage/operations"
 	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/storage/order"
 	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/storage/user"
 	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/subscriber"
@@ -67,16 +68,18 @@ func (a *app) Run(cfg Config) error {
 
 	userStorage := user.New(pool)
 	orderStorage := order.New(pool)
+	operationsStorage := operations.New(pool)
 	pub, queue := publisher.New()
 	defer pub.Close()
 
 	accrualConfig := calc.Config{HostURL: cfg.NetAddress.String(), RetryCount: 3}
 
 	serviceDeps := service.Deps{
-		UserStorage:  userStorage,
-		OrderStorage: orderStorage,
-		TokenBuilder: authorisation,
-		Calculator:   calc.NewHTTPClient(&accrualConfig),
+		UserStorage:       userStorage,
+		OrderStorage:      orderStorage,
+		OperationsStorage: operationsStorage,
+		TokenBuilder:      authorisation,
+		Calculator:        calc.NewHTTPClient(&accrualConfig),
 	}
 	service := service.New(&service.Config{}, &serviceDeps)
 

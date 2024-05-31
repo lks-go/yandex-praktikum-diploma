@@ -21,6 +21,11 @@ type OrderStorage interface {
 	UsersOrders(ctx context.Context, userId string) ([]Order, error)
 }
 
+type OperationsStorage interface {
+	Current(ctx context.Context, userID string) (float64, error)
+	Withdrawn(ctx context.Context, userID string) (float64, error)
+}
+
 type OrderProcessPublisher interface {
 	Publish(ctx context.Context, msg OrderEvent)
 }
@@ -42,6 +47,7 @@ type Config struct {
 type Deps struct {
 	UserStorage           UserStorage
 	OrderStorage          OrderStorage
+	OperationsStorage     OperationsStorage
 	TokenBuilder          TokenBuilder
 	OrderProcessPublisher OrderProcessPublisher
 	Calculator            Calculator
@@ -60,6 +66,7 @@ func New(cfg *Config, d *Deps) *Service {
 		cfg:                   cfg,
 		userStorage:           d.UserStorage,
 		orderStorage:          d.OrderStorage,
+		operationsStorage:     d.OperationsStorage,
 		tokenBuilder:          d.TokenBuilder,
 		orderProcessPublisher: d.OrderProcessPublisher,
 	}
@@ -69,6 +76,7 @@ type Service struct {
 	cfg                   *Config
 	userStorage           UserStorage
 	orderStorage          OrderStorage
+	operationsStorage     OperationsStorage
 	tokenBuilder          TokenBuilder
 	orderProcessPublisher OrderProcessPublisher
 	calculator            Calculator
@@ -207,6 +215,30 @@ func (s *Service) OrderList(ctx context.Context, login string) ([]Order, error) 
 	}
 
 	return orders, nil
+}
+
+func (s *Service) UserBalance(ctx context.Context, login string) (*UserBalance, error) {
+	user, err := s.userStorage.UserByLogin(ctx, login)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user by login [%s]: %w", login, err)
+	}
+
+	current, err := s.operationsStorage.Current(ctx, user.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user's current balance: %w", err)
+	}
+
+	withdrawn, err := s.operationsStorage.Withdrawn(ctx, user.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user's current balance: %w", err)
+	}
+
+	ub := UserBalance{
+		Current:   current,
+		Withdrawn: withdrawn,
+	}
+
+	return &ub, nil
 }
 
 func (s *Service) hashPassword(pass string) string {
