@@ -66,7 +66,7 @@ func (s *Storage) AddOrder(ctx context.Context, o *service.Order) (string, error
 	if err != nil {
 		if err, ok := err.(*pgconn.PgError); ok {
 			if err.Code == pgerrcode.UniqueViolation {
-				return "", service.ErrOrderAlreadyExists
+				return "", service.ErrAlreadyExists
 			}
 		}
 

@@ -21,6 +21,7 @@ import (
 	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/storage/operations"
 	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/storage/order"
 	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/storage/user"
+	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/storage/withdraw"
 	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/subscriber"
 	"github.com/lks-go/yandex-praktikum-diploma/internal/service"
 	"github.com/lks-go/yandex-praktikum-diploma/internal/service/auth"
@@ -69,6 +70,7 @@ func (a *app) Run(cfg Config) error {
 	userStorage := user.New(pool)
 	orderStorage := order.New(pool)
 	operationsStorage := operations.New(pool)
+	withdrawStorage := withdraw.New(pool)
 	pub, queue := publisher.New()
 	defer pub.Close()
 
@@ -78,6 +80,7 @@ func (a *app) Run(cfg Config) error {
 		UserStorage:       userStorage,
 		OrderStorage:      orderStorage,
 		OperationsStorage: operationsStorage,
+		WithdrawStorage:   withdrawStorage,
 		TokenBuilder:      authorisation,
 		Calculator:        calc.NewHTTPClient(&accrualConfig),
 	}

@@ -35,7 +35,7 @@ func (s *Storage) AddUser(ctx context.Context, login string, passwordHash string
 	if err != nil {
 		if err, ok := err.(*pgconn.PgError); ok {
 			if err.Code == pgerrcode.UniqueViolation {
-				return "", service.ErrUserAlreadyExists
+				return "", service.ErrAlreadyExists
 			}
 		}
 

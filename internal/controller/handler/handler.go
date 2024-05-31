@@ -21,6 +21,7 @@ type Service interface {
 	SaveOrder(ctx context.Context, login string, orderNumber string) error
 	OrderList(ctx context.Context, login string) ([]service.Order, error)
 	UserBalance(ctx context.Context, login string) (*service.UserBalance, error)
+	WithdrawBonuses(ctx context.Context, login string, orderNumber string, amount float64) error
 }
 
 func New(log *logrus.Logger, s Service) *Handler {
@@ -82,7 +83,7 @@ func (h *Handler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 	authToken, err := h.service.RegisterUser(r.Context(), *requestBody.Login, *requestBody.Password)
 	if err != nil {
 		switch {
-		case errors.Is(err, service.ErrUserAlreadyExists):
+		case errors.Is(err, service.ErrAlreadyExists):
 			w.WriteHeader(http.StatusConflict)
 			return
 		case errors.As(err, &errAuth):
@@ -200,7 +201,7 @@ func (h *Handler) SaveOrder(w http.ResponseWriter, r *http.Request) {
 	err = h.service.SaveOrder(r.Context(), r.Header.Get(auth.LoginHeaderName), requestBody)
 	if err != nil {
 		switch {
-		case errors.Is(err, service.ErrOrderAlreadyExists):
+		case errors.Is(err, service.ErrAlreadyExists):
 			w.WriteHeader(http.StatusOK)
 			return
 		case errors.Is(err, service.ErrOrderConflict):
@@ -311,7 +312,48 @@ func (h *Handler) Balance(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Withdraw(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	l := h.log.WithField("handler", "Withdraw")
 
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		l.Errorf("failed to read request body: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	reqDTO := struct {
+		Order string  `json:"order"`
+		Sum   float64 `json:"sum"`
+	}{}
+
+	if err := json.Unmarshal(bodyBytes, &reqDTO); err != nil {
+		l.Errorf("failed to unmarshal request body: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if err := validateOrderNumber(reqDTO.Order); err != nil {
+		l.Warnf("invalid order number: %s", err)
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		return
+	}
+
+	err = h.service.WithdrawBonuses(r.Context(), r.Header.Get(auth.LoginHeaderName), reqDTO.Order, reqDTO.Sum)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrNotEnoughBonuses):
+			l.Warnf("failed to withdraw: %s", err)
+			w.WriteHeader(http.StatusPaymentRequired)
+			return
+		default:
+			l.Errorf("failed to unmarshal request body: %s", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *Handler) Withdrawals(w http.ResponseWriter, r *http.Request) {

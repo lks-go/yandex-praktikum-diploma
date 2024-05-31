@@ -26,6 +26,10 @@ type OperationsStorage interface {
 	Withdrawn(ctx context.Context, userID string) (float64, error)
 }
 
+type WithdrawStorage interface {
+	Withdraw(ctx context.Context, userID string, orderNumber string, amount float64) error
+}
+
 type OrderProcessPublisher interface {
 	Publish(ctx context.Context, msg OrderEvent)
 }
@@ -48,6 +52,7 @@ type Deps struct {
 	UserStorage           UserStorage
 	OrderStorage          OrderStorage
 	OperationsStorage     OperationsStorage
+	WithdrawStorage       WithdrawStorage
 	TokenBuilder          TokenBuilder
 	OrderProcessPublisher OrderProcessPublisher
 	Calculator            Calculator
@@ -67,6 +72,7 @@ func New(cfg *Config, d *Deps) *Service {
 		userStorage:           d.UserStorage,
 		orderStorage:          d.OrderStorage,
 		operationsStorage:     d.OperationsStorage,
+		withdrawStorage:       d.WithdrawStorage,
 		tokenBuilder:          d.TokenBuilder,
 		orderProcessPublisher: d.OrderProcessPublisher,
 	}
@@ -77,6 +83,7 @@ type Service struct {
 	userStorage           UserStorage
 	orderStorage          OrderStorage
 	operationsStorage     OperationsStorage
+	withdrawStorage       WithdrawStorage
 	tokenBuilder          TokenBuilder
 	orderProcessPublisher OrderProcessPublisher
 	calculator            Calculator
@@ -141,7 +148,7 @@ func (s *Service) SaveOrder(ctx context.Context, login string, orderNumber strin
 	if order != nil {
 		switch {
 		case order.UserID == user.ID:
-			return ErrOrderAlreadyExists
+			return ErrAlreadyExists
 		case order.UserID != user.ID:
 			return ErrOrderConflict
 		}
@@ -239,6 +246,28 @@ func (s *Service) UserBalance(ctx context.Context, login string) (*UserBalance, 
 	}
 
 	return &ub, nil
+}
+
+func (s *Service) WithdrawBonuses(ctx context.Context, login string, orderNumber string, amount float64) error {
+	user, err := s.userStorage.UserByLogin(ctx, login)
+	if err != nil {
+		return fmt.Errorf("failed to get user by login [%s]: %w", login, err)
+	}
+
+	currentBalance, err := s.operationsStorage.Current(ctx, user.ID)
+	if err != nil {
+		return fmt.Errorf("failed to get user's current balance: %w", err)
+	}
+
+	if currentBalance < amount {
+		return ErrNotEnoughBonuses
+	}
+
+	if err := s.withdrawStorage.Withdraw(ctx, user.ID, orderNumber, amount); err != nil {
+		return fmt.Errorf("failed to withdraw bonuses: %w", err)
+	}
+
+	return nil
 }
 
 func (s *Service) hashPassword(pass string) string {

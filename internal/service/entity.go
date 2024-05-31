@@ -5,14 +5,14 @@ import (
 )
 
 var (
-	ErrUserAlreadyExists     = errors.New("user already exists")
+	ErrAlreadyExists         = errors.New("already exists")
 	ErrInvalidToken          = errors.New("invalid token")
 	ErrTokenExpired          = errors.New("token expired")
 	ErrUsersPasswordNotMatch = errors.New("users password not match")
 	ErrUserNotFound          = errors.New("user not found")
 	ErrOrderNotFound         = errors.New("order not found")
-	ErrOrderAlreadyExists    = errors.New("order already exists")
-	ErrOrderConflict         = errors.New("order already exists")
+	ErrOrderConflict         = errors.New("order already registered another user")
+	ErrNotEnoughBonuses      = errors.New("not enough bonuses on balance")
 
 	ErrThirdPartyOrderNotRegistered = errors.New("third party order not registered")
 	ErrThirdPartyToManyRequests     = errors.New("third party to many requests")
