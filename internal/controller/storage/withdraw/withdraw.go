@@ -37,3 +37,42 @@ func (s *Storage) Withdraw(ctx context.Context, userID string, orderNumber strin
 
 	return nil
 }
+
+func (s *Storage) Withdrawals(ctx context.Context, userID string) ([]service.Withdrawal, error) {
+	q := `SELECT order_number, amount, processed_at  FROM orders WHERE user_id = $1;`
+
+	row, err := s.db.QueryContext(ctx, q, userID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, service.ErrNotFound
+		}
+		return nil, fmt.Errorf("failed to make query: %w", err)
+	}
+	defer row.Close()
+
+	type withdrawalDTO struct {
+		OrderNumber string
+		Amount      float64
+		ProcessedAt string
+	}
+
+	withdrawals := make([]service.Withdrawal, 0)
+	for row.Next() {
+		dto := withdrawalDTO{}
+		if err := row.Scan(&dto.OrderNumber, &dto.Amount, &dto.ProcessedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan withdrawal: %w", err)
+		}
+
+		withdrawals = append(withdrawals, service.Withdrawal{
+			OrderNumber: dto.OrderNumber,
+			Amount:      dto.Amount,
+			ProcessedAt: dto.ProcessedAt,
+		})
+	}
+
+	if err := row.Err(); err != nil {
+		return nil, fmt.Errorf("rows fail: %w", err)
+	}
+
+	return withdrawals, nil
+}

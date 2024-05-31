@@ -51,7 +51,7 @@ func (s *Storage) UserByLogin(ctx context.Context, login string) (*service.User,
 	u := user{}
 	if err := s.db.QueryRowContext(ctx, q, login).Scan(&u.ID, &u.Login, &u.PasswordHash); err != nil {
 		if err == sql.ErrNoRows {
-			return nil, service.ErrUserNotFound
+			return nil, service.ErrNotFound
 		}
 
 		return nil, fmt.Errorf("query row error: %w", err)

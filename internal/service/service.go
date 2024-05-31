@@ -28,6 +28,7 @@ type OperationsStorage interface {
 
 type WithdrawStorage interface {
 	Withdraw(ctx context.Context, userID string, orderNumber string, amount float64) error
+	Withdrawals(ctx context.Context, userID string) ([]Withdrawal, error)
 }
 
 type OrderProcessPublisher interface {
@@ -129,8 +130,8 @@ func (s *Service) SaveOrder(ctx context.Context, login string, orderNumber strin
 	user, err := s.userStorage.UserByLogin(ctx, login)
 	if err != nil {
 		switch {
-		case errors.Is(err, ErrUserNotFound):
-			return ErrUserNotFound
+		case errors.Is(err, ErrNotFound):
+			return ErrNotFound
 		default:
 			return fmt.Errorf("failed to get user by login: %w", err)
 		}
@@ -141,7 +142,7 @@ func (s *Service) SaveOrder(ctx context.Context, login string, orderNumber strin
 	}
 
 	order, err := s.orderStorage.OrderByNumber(ctx, orderNumber)
-	if err != nil && !errors.Is(err, ErrOrderNotFound) {
+	if err != nil && !errors.Is(err, ErrNotFound) {
 		return fmt.Errorf("failed to get order by number: %w", err)
 	}
 
@@ -268,6 +269,20 @@ func (s *Service) WithdrawBonuses(ctx context.Context, login string, orderNumber
 	}
 
 	return nil
+}
+
+func (s *Service) Withdrawals(ctx context.Context, login string) ([]Withdrawal, error) {
+	user, err := s.userStorage.UserByLogin(ctx, login)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user by login [%s]: %w", login, err)
+	}
+
+	withdrawals, err := s.withdrawStorage.Withdrawals(ctx, user.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get withdrawals: %w", err)
+	}
+
+	return withdrawals, err
 }
 
 func (s *Service) hashPassword(pass string) string {

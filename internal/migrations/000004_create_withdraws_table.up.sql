@@ -3,6 +3,7 @@ CREATE TABLE withdraws (
     user_id UUID NOT NULL,
     order_number VARCHAR UNIQUE NOT NULL,
     amount INTEGER,
+    processed_at TIMESTAMPTZ,
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

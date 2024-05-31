@@ -40,7 +40,7 @@ func (s *Storage) OrderByNumber(ctx context.Context, orderNumber string) (*servi
 	err := s.db.QueryRowContext(ctx, q, orderNumber).Scan(&o.ID, &o.UserID, &o.Number, &o.Status, &o.Accrual)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, service.ErrOrderNotFound
+			return nil, service.ErrNotFound
 		}
 
 		return nil, fmt.Errorf("query row error: %w", err)
@@ -102,9 +102,9 @@ func (s *Storage) UsersOrders(ctx context.Context, userId string) ([]service.Ord
 	row, err := s.db.QueryContext(ctx, q, userId)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, service.ErrOrderNotFound
+			return nil, service.ErrNotFound
 		}
-		return nil, fmt.Errorf("failed to more query: %w", err)
+		return nil, fmt.Errorf("failed to make query: %w", err)
 	}
 	defer row.Close()
 

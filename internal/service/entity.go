@@ -9,8 +9,7 @@ var (
 	ErrInvalidToken          = errors.New("invalid token")
 	ErrTokenExpired          = errors.New("token expired")
 	ErrUsersPasswordNotMatch = errors.New("users password not match")
-	ErrUserNotFound          = errors.New("user not found")
-	ErrOrderNotFound         = errors.New("order not found")
+	ErrNotFound              = errors.New("not found")
 	ErrOrderConflict         = errors.New("order already registered another user")
 	ErrNotEnoughBonuses      = errors.New("not enough bonuses on balance")
 
@@ -60,4 +59,10 @@ type OrderEvent struct {
 type UserBalance struct {
 	Current   float64
 	Withdrawn float64
+}
+
+type Withdrawal struct {
+	OrderNumber string
+	Amount      float64
+	ProcessedAt string
 }

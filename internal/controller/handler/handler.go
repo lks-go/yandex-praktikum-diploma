@@ -22,6 +22,7 @@ type Service interface {
 	OrderList(ctx context.Context, login string) ([]service.Order, error)
 	UserBalance(ctx context.Context, login string) (*service.UserBalance, error)
 	WithdrawBonuses(ctx context.Context, login string, orderNumber string, amount float64) error
+	Withdrawals(ctx context.Context, login string) ([]service.Withdrawal, error)
 }
 
 func New(log *logrus.Logger, s Service) *Handler {
@@ -156,7 +157,7 @@ func (h *Handler) LoginUser(w http.ResponseWriter, r *http.Request) {
 			l.Errorf("failed to login user: %s", errAuth)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
-		case errors.Is(err, service.ErrUserNotFound):
+		case errors.Is(err, service.ErrNotFound):
 			l.Warnf("failed to login user: %s", err)
 			w.WriteHeader(http.StatusUnauthorized)
 			return
@@ -224,7 +225,7 @@ func (h *Handler) Orders(w http.ResponseWriter, r *http.Request) {
 	orderList, err := h.service.OrderList(r.Context(), r.Header.Get(auth.LoginHeaderName))
 	if err != nil {
 		switch {
-		case errors.Is(err, service.ErrOrderNotFound):
+		case errors.Is(err, service.ErrNotFound):
 			w.WriteHeader(http.StatusNoContent)
 			return
 		default:
@@ -357,7 +358,51 @@ func (h *Handler) Withdraw(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Withdrawals(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	l := h.log.WithField("handler", "Withdrawals")
 
+	withdrawals, err := h.service.Withdrawals(r.Context(), r.Header.Get(auth.LoginHeaderName))
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrNotFound):
+			w.WriteHeader(http.StatusNoContent)
+			return
+		default:
+			l.Errorf("failed to get withdrawals: %s", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	}
+
+	type withdrawalDTO struct {
+		Order       string  `json:"order"`
+		Sum         float64 `json:"sum"`
+		ProcessedAt string  `json:"processed_at"`
+	}
+
+	respDTO := make([]withdrawalDTO, 0, len(withdrawals))
+	for _, wd := range withdrawals {
+		respDTO = append(respDTO, withdrawalDTO{
+			Order:       wd.OrderNumber,
+			Sum:         wd.Amount,
+			ProcessedAt: wd.ProcessedAt,
+		})
+	}
+
+	body, err := json.Marshal(respDTO)
+	if err != nil {
+		l.Errorf("failed to marshal waithdrawals list: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if _, err := w.Write(body); err != nil {
+		l.Errorf("failed to write body: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func validateLogin(login *string) error {
