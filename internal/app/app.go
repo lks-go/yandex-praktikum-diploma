@@ -78,12 +78,13 @@ func (a *app) Run(cfg Config) error {
 	accrualConfig := calc.Config{HostURL: cfg.NetAddress.String(), RetryCount: 3}
 
 	serviceDeps := service.Deps{
-		UserStorage:       userStorage,
-		OrderStorage:      orderStorage,
-		OperationsStorage: operationsStorage,
-		WithdrawStorage:   withdrawStorage,
-		TokenBuilder:      authorisation,
-		Calculator:        calc.NewHTTPClient(&accrualConfig),
+		UserStorage:           userStorage,
+		OrderStorage:          orderStorage,
+		OperationsStorage:     operationsStorage,
+		WithdrawStorage:       withdrawStorage,
+		TokenBuilder:          authorisation,
+		OrderProcessPublisher: pub,
+		Calculator:            calc.NewHTTPClient(&accrualConfig),
 	}
 	service := service.New(&service.Config{}, &serviceDeps)
 

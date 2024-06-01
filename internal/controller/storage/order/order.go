@@ -34,7 +34,7 @@ type order struct {
 }
 
 func (s *Storage) OrderByNumber(ctx context.Context, orderNumber string) (*service.Order, error) {
-	q := `SELECT id, user_id, order_number, status, calc  FROM orders WHERE number = $1;`
+	q := `SELECT id, user_id, order_number, status, accrual  FROM orders WHERE order_number = $1;`
 
 	o := order{}
 	err := s.db.QueryRowContext(ctx, q, orderNumber).Scan(&o.ID, &o.UserID, &o.Number, &o.Status, &o.Accrual)
@@ -59,7 +59,7 @@ func (s *Storage) OrderByNumber(ctx context.Context, orderNumber string) (*servi
 }
 
 func (s *Storage) AddOrder(ctx context.Context, o *service.Order) (string, error) {
-	q := `INSERT INTO orders (user_id, order_number, status, calc) VALUES ($1, $2) RETURNING id`
+	q := `INSERT INTO orders (user_id, order_number, status, accrual) VALUES ($1, $2, $3, $4) RETURNING id`
 
 	id := ""
 	err := s.db.QueryRowContext(ctx, q, o.UserID, o.Number, o.Status, o.Accrual).Scan(&id)
