@@ -30,7 +30,7 @@ type Client struct {
 }
 
 func (c *Client) Accrual(ctx context.Context, orderNumber string) (*service.Order, error) {
-	res, err := c.R().SetContext(ctx).Get("GET /api/orders/" + orderNumber)
+	res, err := c.R().SetContext(ctx).Get("/api/orders/" + orderNumber)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}

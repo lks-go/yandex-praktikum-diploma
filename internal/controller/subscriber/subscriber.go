@@ -15,7 +15,11 @@ type Deps struct {
 }
 
 func New(d *Deps) *Subscriber {
-	return &Subscriber{queue: d.Queue, handle: d.Handle}
+	return &Subscriber{
+		log:    d.Log,
+		queue:  d.Queue,
+		handle: d.Handle,
+	}
 }
 
 type Subscriber struct {

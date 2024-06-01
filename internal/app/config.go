@@ -15,6 +15,7 @@ type Config struct {
 	NetAddress                NetAddress
 	DatabaseDSN               string
 	HttpServerShutdownTimeout time.Duration
+	AccrualSystemAddress      string
 }
 
 func (a *app) BuildConfig() (Config, error) {
@@ -23,6 +24,7 @@ func (a *app) BuildConfig() (Config, error) {
 	}
 	flag.Var(&cfg.NetAddress, "a", "Net address host:port")
 	flag.StringVar(&cfg.DatabaseDSN, "d", "", "Database connection string")
+	flag.StringVar(&cfg.AccrualSystemAddress, "r", "", "Accrual system address")
 	flag.Parse()
 
 	return cfg, nil

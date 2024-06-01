@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/sirupsen/logrus"
 )
 
 type UserStorage interface {
@@ -24,6 +26,7 @@ type OrderStorage interface {
 type OperationsStorage interface {
 	Current(ctx context.Context, userID string) (float64, error)
 	Withdrawn(ctx context.Context, userID string) (float64, error)
+	Add(ctx context.Context, o *Operation) error
 }
 
 type WithdrawStorage interface {
@@ -50,6 +53,7 @@ type Config struct {
 }
 
 type Deps struct {
+	Log                   *logrus.Logger
 	UserStorage           UserStorage
 	OrderStorage          OrderStorage
 	OperationsStorage     OperationsStorage
@@ -70,17 +74,20 @@ func New(cfg *Config, d *Deps) *Service {
 
 	return &Service{
 		cfg:                   cfg,
+		log:                   d.Log,
 		userStorage:           d.UserStorage,
 		orderStorage:          d.OrderStorage,
 		operationsStorage:     d.OperationsStorage,
 		withdrawStorage:       d.WithdrawStorage,
 		tokenBuilder:          d.TokenBuilder,
 		orderProcessPublisher: d.OrderProcessPublisher,
+		calculator:            d.Calculator,
 	}
 }
 
 type Service struct {
 	cfg                   *Config
+	log                   *logrus.Logger
 	userStorage           UserStorage
 	orderStorage          OrderStorage
 	operationsStorage     OperationsStorage
@@ -162,7 +169,9 @@ func (s *Service) SaveOrder(ctx context.Context, login string, orderNumber strin
 	}
 
 	go s.orderProcessPublisher.Publish(ctx, OrderEvent{
-		OrderNumber: orderID,
+		UserID:      user.ID,
+		OrderID:     orderID,
+		OrderNumber: newOrder.Number,
 	})
 
 	return nil
@@ -178,29 +187,51 @@ func (s *Service) OrderAccrual(ctx context.Context, event OrderEvent) error {
 			errors.Is(err, ErrThirdPartyToManyRequests),
 			errors.Is(err, ErrThirdPartyInternal):
 			needRepublish = true
+
+			s.log.Errorf("failed to accrual order: %s", err)
 		default:
 			return fmt.Errorf("failed to accrual order: %w", err)
 		}
 	}
 
-	if needRepublish {
-		if event.Attempt >= s.cfg.MaxRepublishCount {
-			return fmt.Errorf("event republish limit is over")
+	if accOrder == nil {
+		accOrder = &Order{
+			ID: event.OrderID,
 		}
+	} else {
+		accOrder.ID = event.OrderID
+	}
 
-		go func() {
-			time.Sleep(s.cfg.RepublishWaitTime)
-			s.orderProcessPublisher.Publish(ctx, OrderEvent{
-				OrderNumber: event.OrderNumber,
-				Attempt:     event.Attempt + 1,
-			})
-		}()
+	if needRepublish {
+		switch {
+		case event.Attempt >= s.cfg.MaxRepublishCount:
+			s.log.Errorf("event republish limit is over")
+			accOrder.Status = Invalid
+		default:
+			go func() {
+				s.log.Printf("republishing event with order[%s], attempt %d", event.OrderNumber, event.Attempt)
+				time.Sleep(s.cfg.RepublishWaitTime * time.Duration(event.Attempt))
+				event.Attempt++
+				s.orderProcessPublisher.Publish(ctx, event)
+			}()
 
-		return nil
+			return nil
+		}
 	}
 
 	if err := s.orderStorage.UpdateOrder(ctx, accOrder); err != nil {
 		return fmt.Errorf("failed to update order [number %s]: %w", accOrder.Number, err)
+	}
+
+	if accOrder.Accrual > 0 {
+		o := Operation{
+			UserID:      event.UserID,
+			OrderNumber: event.OrderNumber,
+			Amount:      accOrder.Accrual,
+		}
+		if err := s.operationsStorage.Add(ctx, &o); err != nil {
+			return fmt.Errorf("failed to add operation: %w", err)
+		}
 	}
 
 	return nil

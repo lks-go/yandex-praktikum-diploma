@@ -52,6 +52,8 @@ type Order struct {
 }
 
 type OrderEvent struct {
+	UserID      string
+	OrderID     string
 	OrderNumber string
 	Attempt     int32
 }
@@ -65,4 +67,10 @@ type Withdrawal struct {
 	OrderNumber string
 	Amount      float64
 	ProcessedAt string
+}
+
+type Operation struct {
+	UserID      string
+	OrderNumber string
+	Amount      int
 }

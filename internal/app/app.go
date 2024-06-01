@@ -75,9 +75,10 @@ func (a *app) Run(cfg Config) error {
 	pub, queue := publisher.New()
 	defer pub.Close()
 
-	accrualConfig := calc.Config{HostURL: cfg.NetAddress.String(), RetryCount: 3}
+	accrualConfig := calc.Config{HostURL: cfg.AccrualSystemAddress, RetryCount: 3}
 
 	serviceDeps := service.Deps{
+		Log:                   log,
 		UserStorage:           userStorage,
 		OrderStorage:          orderStorage,
 		OperationsStorage:     operationsStorage,

@@ -77,9 +77,9 @@ func (s *Storage) AddOrder(ctx context.Context, o *service.Order) (string, error
 }
 
 func (s *Storage) UpdateOrder(ctx context.Context, o *service.Order) error {
-	q := `UPDATE orders SET status = $2,  accrual = $3 WHERE number = $1`
+	q := `UPDATE orders SET status = $2,  accrual = $3, updated_at = now() WHERE id = $1`
 
-	res, err := s.db.ExecContext(ctx, q, o.Number, o.Status, o.Accrual)
+	res, err := s.db.ExecContext(ctx, q, o.ID, o.Status, o.Accrual)
 	if err != nil {
 		return fmt.Errorf("failed to exec query: %w", err)
 	}
