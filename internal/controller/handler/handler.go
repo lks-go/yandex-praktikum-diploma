@@ -21,7 +21,7 @@ type Service interface {
 	SaveOrder(ctx context.Context, login string, orderNumber string) error
 	OrderList(ctx context.Context, login string) ([]service.Order, error)
 	UserBalance(ctx context.Context, login string) (*service.UserBalance, error)
-	WithdrawBonuses(ctx context.Context, login string, orderNumber string, amount float64) error
+	WithdrawBonuses(ctx context.Context, login string, orderNumber string, amount int) error
 	Withdrawals(ctx context.Context, login string) ([]service.Withdrawal, error)
 }
 
@@ -292,8 +292,8 @@ func (h *Handler) Balance(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type dto struct {
-		Current   float64 `json:"current"`
-		Withdrawn float64 `json:"withdrawn"`
+		Current   int `json:"current"`
+		Withdrawn int `json:"withdrawn"`
 	}
 
 	body, err := json.Marshal(dto(*userBalance))
@@ -324,8 +324,8 @@ func (h *Handler) Withdraw(w http.ResponseWriter, r *http.Request) {
 	}
 
 	reqDTO := struct {
-		Order string  `json:"order"`
-		Sum   float64 `json:"sum"`
+		Order string `json:"order"`
+		Sum   int    `json:"sum"`
 	}{}
 
 	if err := json.Unmarshal(bodyBytes, &reqDTO); err != nil {
@@ -396,13 +396,13 @@ func (h *Handler) Withdrawals(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Add("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write(body); err != nil {
 		l.Errorf("failed to write body: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-
-	w.WriteHeader(http.StatusOK)
 }
 
 func validateLogin(login *string) error {

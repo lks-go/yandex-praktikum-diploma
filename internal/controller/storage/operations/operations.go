@@ -21,10 +21,10 @@ type Storage struct {
 	db *sql.DB
 }
 
-func (s *Storage) Current(ctx context.Context, userID string) (float64, error) {
+func (s *Storage) Current(ctx context.Context, userID string) (int, error) {
 	q := `SELECT COALESCE(sum(amount), 0) FROM operations WHERE user_id = $1`
 
-	var amount float64
+	var amount int
 	if err := s.db.QueryRowContext(ctx, q, userID).Scan(&amount); err != nil {
 		return 0, err
 	}
@@ -32,10 +32,10 @@ func (s *Storage) Current(ctx context.Context, userID string) (float64, error) {
 	return amount, nil
 }
 
-func (s *Storage) Withdrawn(ctx context.Context, userID string) (float64, error) {
+func (s *Storage) Withdrawn(ctx context.Context, userID string) (int, error) {
 	q := `SELECT COALESCE(sum(amount), 0) FROM operations WHERE user_id = $1 AND amount < 0;`
 
-	var amount float64
+	var amount int
 	if err := s.db.QueryRowContext(ctx, q, userID).Scan(&amount); err != nil {
 		return 0, err
 	}
@@ -59,4 +59,43 @@ func (s *Storage) Add(ctx context.Context, o *service.Operation) error {
 	}
 
 	return nil
+}
+
+func (s *Storage) Withdrawals(ctx context.Context, userID string) ([]service.Withdrawal, error) {
+	q := `SELECT order_number, amount, created_at  FROM operations WHERE user_id = $1;`
+
+	row, err := s.db.QueryContext(ctx, q, userID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, service.ErrNotFound
+		}
+		return nil, fmt.Errorf("failed to make query: %w", err)
+	}
+	defer row.Close()
+
+	type withdrawalDTO struct {
+		OrderNumber string
+		Amount      float64
+		CreatedAt   string
+	}
+
+	withdrawals := make([]service.Withdrawal, 0)
+	for row.Next() {
+		dto := withdrawalDTO{}
+		if err := row.Scan(&dto.OrderNumber, &dto.Amount, &dto.CreatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan withdrawal: %w", err)
+		}
+
+		withdrawals = append(withdrawals, service.Withdrawal{
+			OrderNumber: dto.OrderNumber,
+			Amount:      dto.Amount,
+			ProcessedAt: dto.CreatedAt,
+		})
+	}
+
+	if err := row.Err(); err != nil {
+		return nil, fmt.Errorf("rows fail: %w", err)
+	}
+
+	return withdrawals, nil
 }

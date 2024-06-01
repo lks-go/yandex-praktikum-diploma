@@ -24,13 +24,9 @@ type OrderStorage interface {
 }
 
 type OperationsStorage interface {
-	Current(ctx context.Context, userID string) (float64, error)
-	Withdrawn(ctx context.Context, userID string) (float64, error)
+	Current(ctx context.Context, userID string) (int, error)
+	Withdrawn(ctx context.Context, userID string) (int, error)
 	Add(ctx context.Context, o *Operation) error
-}
-
-type WithdrawStorage interface {
-	Withdraw(ctx context.Context, userID string, orderNumber string, amount float64) error
 	Withdrawals(ctx context.Context, userID string) ([]Withdrawal, error)
 }
 
@@ -57,7 +53,6 @@ type Deps struct {
 	UserStorage           UserStorage
 	OrderStorage          OrderStorage
 	OperationsStorage     OperationsStorage
-	WithdrawStorage       WithdrawStorage
 	TokenBuilder          TokenBuilder
 	OrderProcessPublisher OrderProcessPublisher
 	Calculator            Calculator
@@ -78,7 +73,6 @@ func New(cfg *Config, d *Deps) *Service {
 		userStorage:           d.UserStorage,
 		orderStorage:          d.OrderStorage,
 		operationsStorage:     d.OperationsStorage,
-		withdrawStorage:       d.WithdrawStorage,
 		tokenBuilder:          d.TokenBuilder,
 		orderProcessPublisher: d.OrderProcessPublisher,
 		calculator:            d.Calculator,
@@ -91,7 +85,6 @@ type Service struct {
 	userStorage           UserStorage
 	orderStorage          OrderStorage
 	operationsStorage     OperationsStorage
-	withdrawStorage       WithdrawStorage
 	tokenBuilder          TokenBuilder
 	orderProcessPublisher OrderProcessPublisher
 	calculator            Calculator
@@ -275,7 +268,7 @@ func (s *Service) UserBalance(ctx context.Context, login string) (*UserBalance, 
 	return &ub, nil
 }
 
-func (s *Service) WithdrawBonuses(ctx context.Context, login string, orderNumber string, amount float64) error {
+func (s *Service) WithdrawBonuses(ctx context.Context, login string, orderNumber string, amount int) error {
 	user, err := s.userStorage.UserByLogin(ctx, login)
 	if err != nil {
 		return fmt.Errorf("failed to get user by login [%s]: %w", login, err)
@@ -290,7 +283,12 @@ func (s *Service) WithdrawBonuses(ctx context.Context, login string, orderNumber
 		return ErrNotEnoughBonuses
 	}
 
-	if err := s.withdrawStorage.Withdraw(ctx, user.ID, orderNumber, amount); err != nil {
+	op := Operation{
+		UserID:      user.ID,
+		OrderNumber: orderNumber,
+		Amount:      -amount,
+	}
+	if err := s.operationsStorage.Add(ctx, &op); err != nil {
 		return fmt.Errorf("failed to withdraw bonuses: %w", err)
 	}
 
@@ -303,7 +301,7 @@ func (s *Service) Withdrawals(ctx context.Context, login string) ([]Withdrawal, 
 		return nil, fmt.Errorf("failed to get user by login [%s]: %w", login, err)
 	}
 
-	withdrawals, err := s.withdrawStorage.Withdrawals(ctx, user.ID)
+	withdrawals, err := s.operationsStorage.Withdrawals(ctx, user.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get withdrawals: %w", err)
 	}

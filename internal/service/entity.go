@@ -59,8 +59,8 @@ type OrderEvent struct {
 }
 
 type UserBalance struct {
-	Current   float64
-	Withdrawn float64
+	Current   int
+	Withdrawn int
 }
 
 type Withdrawal struct {
