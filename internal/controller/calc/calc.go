@@ -47,7 +47,7 @@ func (c *Client) Accrual(ctx context.Context, orderNumber string) (*service.Orde
 	type order struct {
 		Number  string
 		Status  string
-		Accrual int
+		Accrual float32
 	}
 
 	o := order{}

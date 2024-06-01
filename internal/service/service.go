@@ -24,8 +24,8 @@ type OrderStorage interface {
 }
 
 type OperationsStorage interface {
-	Current(ctx context.Context, userID string) (int, error)
-	Withdrawn(ctx context.Context, userID string) (int, error)
+	Current(ctx context.Context, userID string) (float32, error)
+	Withdrawn(ctx context.Context, userID string) (float32, error)
 	Add(ctx context.Context, o *Operation) error
 	Withdrawals(ctx context.Context, userID string) ([]Withdrawal, error)
 }
@@ -268,7 +268,7 @@ func (s *Service) UserBalance(ctx context.Context, login string) (*UserBalance, 
 	return &ub, nil
 }
 
-func (s *Service) WithdrawBonuses(ctx context.Context, login string, orderNumber string, amount int) error {
+func (s *Service) WithdrawBonuses(ctx context.Context, login string, orderNumber string, amount float32) error {
 	user, err := s.userStorage.UserByLogin(ctx, login)
 	if err != nil {
 		return fmt.Errorf("failed to get user by login [%s]: %w", login, err)

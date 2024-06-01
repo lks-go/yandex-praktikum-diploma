@@ -48,7 +48,7 @@ type Order struct {
 	UserID     string
 	Number     string
 	Status     OrderStatus
-	Accrual    int
+	Accrual    float32
 	UploadedAt time.Time
 }
 
@@ -60,8 +60,8 @@ type OrderEvent struct {
 }
 
 type UserBalance struct {
-	Current   int
-	Withdrawn int
+	Current   float32
+	Withdrawn float32
 }
 
 type Withdrawal struct {
@@ -73,5 +73,5 @@ type Withdrawal struct {
 type Operation struct {
 	UserID      string
 	OrderNumber string
-	Amount      int
+	Amount      float32
 }

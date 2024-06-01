@@ -22,7 +22,7 @@ type Service interface {
 	SaveOrder(ctx context.Context, login string, orderNumber string) error
 	OrderList(ctx context.Context, login string) ([]service.Order, error)
 	UserBalance(ctx context.Context, login string) (*service.UserBalance, error)
-	WithdrawBonuses(ctx context.Context, login string, orderNumber string, amount int) error
+	WithdrawBonuses(ctx context.Context, login string, orderNumber string, amount float32) error
 	Withdrawals(ctx context.Context, login string) ([]service.Withdrawal, error)
 }
 
@@ -236,11 +236,16 @@ func (h *Handler) Orders(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if len(orderList) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
 	type orderDTO struct {
-		Number     string `json:"number"`
-		Status     string `json:"status"`
-		Accrual    *int   `json:"accrual,omitempty"`
-		UploadedAt string `json:"uploaded_at"`
+		Number     string   `json:"number"`
+		Status     string   `json:"status"`
+		Accrual    *float32 `json:"accrual,omitempty"`
+		UploadedAt string   `json:"uploaded_at"`
 	}
 
 	orders := make([]orderDTO, 0, len(orderList))
@@ -253,7 +258,8 @@ func (h *Handler) Orders(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if o.Accrual > 0 {
-			*order.Accrual = o.Accrual
+			accrual := o.Accrual
+			order.Accrual = &accrual
 		}
 
 		orders = append(orders, order)
@@ -263,11 +269,6 @@ func (h *Handler) Orders(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		l.Errorf("failed to marshal order list: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if len(orders) == 0 {
-		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
@@ -298,8 +299,8 @@ func (h *Handler) Balance(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type dto struct {
-		Current   int `json:"current"`
-		Withdrawn int `json:"withdrawn"`
+		Current   float32 `json:"current"`
+		Withdrawn float32 `json:"withdrawn"`
 	}
 
 	body, err := json.Marshal(dto(*userBalance))
@@ -330,8 +331,8 @@ func (h *Handler) Withdraw(w http.ResponseWriter, r *http.Request) {
 	}
 
 	reqDTO := struct {
-		Order string `json:"order"`
-		Sum   int    `json:"sum"`
+		Order string  `json:"order"`
+		Sum   float32 `json:"sum"`
 	}{}
 
 	if err := json.Unmarshal(bodyBytes, &reqDTO); err != nil {
@@ -378,6 +379,11 @@ func (h *Handler) Withdrawals(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+	}
+
+	if len(withdrawals) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
 	}
 
 	type withdrawalDTO struct {

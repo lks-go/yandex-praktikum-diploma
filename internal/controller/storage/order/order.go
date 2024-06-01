@@ -27,7 +27,7 @@ type order struct {
 	UserID     string
 	Number     string
 	Status     string
-	Accrual    int
+	Accrual    float32
 	UploadedAt time.Time
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
@@ -113,7 +113,7 @@ func (s *Storage) UsersOrders(ctx context.Context, userID string) ([]service.Ord
 		UserID     string
 		Number     string
 		Status     string
-		Accrual    int
+		Accrual    float32
 		UploadedAt time.Time
 	}
 

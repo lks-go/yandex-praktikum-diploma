@@ -22,10 +22,10 @@ type Storage struct {
 	db *sql.DB
 }
 
-func (s *Storage) Current(ctx context.Context, userID string) (int, error) {
+func (s *Storage) Current(ctx context.Context, userID string) (float32, error) {
 	q := `SELECT COALESCE(sum(amount), 0) FROM operations WHERE user_id = $1`
 
-	var amount int
+	var amount float32
 	if err := s.db.QueryRowContext(ctx, q, userID).Scan(&amount); err != nil {
 		return 0, err
 	}
@@ -33,10 +33,10 @@ func (s *Storage) Current(ctx context.Context, userID string) (int, error) {
 	return amount, nil
 }
 
-func (s *Storage) Withdrawn(ctx context.Context, userID string) (int, error) {
+func (s *Storage) Withdrawn(ctx context.Context, userID string) (float32, error) {
 	q := `SELECT COALESCE(sum(amount), 0) FROM operations WHERE user_id = $1 AND amount < 0;`
 
-	var amount int
+	var amount float32
 	if err := s.db.QueryRowContext(ctx, q, userID).Scan(&amount); err != nil {
 		return 0, err
 	}
@@ -63,7 +63,7 @@ func (s *Storage) Add(ctx context.Context, o *service.Operation) error {
 }
 
 func (s *Storage) Withdrawals(ctx context.Context, userID string) ([]service.Withdrawal, error) {
-	q := `SELECT order_number, amount, created_at  FROM operations WHERE user_id = $1;`
+	q := `SELECT order_number, amount, created_at  FROM operations WHERE user_id = $1 AND amount < 0;`
 
 	row, err := s.db.QueryContext(ctx, q, userID)
 	if err != nil {
@@ -89,7 +89,7 @@ func (s *Storage) Withdrawals(ctx context.Context, userID string) ([]service.Wit
 
 		withdrawals = append(withdrawals, service.Withdrawal{
 			OrderNumber: dto.OrderNumber,
-			Amount:      dto.Amount,
+			Amount:      -dto.Amount,
 			ProcessedAt: dto.CreatedAt,
 		})
 	}

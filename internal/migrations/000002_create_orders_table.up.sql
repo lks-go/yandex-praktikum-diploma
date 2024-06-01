@@ -5,7 +5,7 @@ CREATE TABLE orders (
     user_id UUID NOT NULL,
     order_number VARCHAR UNIQUE NOT NULL,
     status order_status NOT NULL,
-    accrual INTEGER NOT NULL,
+    accrual NUMERIC(11, 2) NOT NULL,
     uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
