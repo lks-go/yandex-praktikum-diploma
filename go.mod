@@ -1,6 +1,6 @@
 module github.com/lks-go/yandex-praktikum-diploma
 
-go 1.22.2
+go 1.21
 
 require (
 	github.com/ShiraazMoollatjie/goluhn v0.0.0-20211017190329-0d86158c056a
