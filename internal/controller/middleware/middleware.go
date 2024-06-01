@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/lks-go/yandex-praktikum-diploma/internal/service"
 	"github.com/lks-go/yandex-praktikum-diploma/internal/service/auth"
@@ -25,6 +26,12 @@ type Middleware struct {
 
 func (mw *Middleware) CheckAuth(next http.Handler) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
+
+		if mustSkip(r) {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		var login string
 		var claims *auth.Claims
 
@@ -64,4 +71,23 @@ func (mw *Middleware) CheckAuth(next http.Handler) http.Handler {
 	}
 
 	return http.HandlerFunc(fn)
+}
+
+var skipURls = []struct {
+	method string
+	path   string
+}{
+	{method: http.MethodPost, path: "/api/user/register"},
+	{method: http.MethodPost, path: "/api/user/login"},
+}
+
+func mustSkip(r *http.Request) bool {
+
+	for _, skip := range skipURls {
+		if skip.method == r.Method && strings.Contains(r.URL.Path, skip.path) {
+			return true
+		}
+	}
+
+	return false
 }
