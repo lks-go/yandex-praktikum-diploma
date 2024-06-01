@@ -1,18 +1,13 @@
 package app
 
 import (
-	"errors"
 	"flag"
-	"fmt"
-	"strconv"
-	"strings"
+	"os"
 	"time"
 )
 
-const DefaultServerAddress = ":8000"
-
 type Config struct {
-	NetAddress                NetAddress
+	NetAddress                string
 	DatabaseDSN               string
 	HTTPServerShutdownTimeout time.Duration
 	AccrualSystemAddress      string
@@ -22,41 +17,22 @@ func (a *app) BuildConfig() (Config, error) {
 	cfg := Config{
 		HTTPServerShutdownTimeout: time.Second * 2,
 	}
-	flag.Var(&cfg.NetAddress, "a", "Net address host:port")
+	flag.StringVar(&cfg.NetAddress, "a", ":8000", "Net address host:port")
 	flag.StringVar(&cfg.DatabaseDSN, "d", "", "Database connection string")
 	flag.StringVar(&cfg.AccrualSystemAddress, "r", "", "Accrual system address")
 	flag.Parse()
 
+	if runAddress, ok := os.LookupEnv("RUN_ADDRESS"); ok {
+		cfg.NetAddress = runAddress
+	}
+
+	if databaseURI, ok := os.LookupEnv("DATABASE_URI"); ok {
+		cfg.DatabaseDSN = databaseURI
+	}
+
+	if accrualSystemSddress, ok := os.LookupEnv("ACCRUAL_SYSTEM_ADDRESS"); ok {
+		cfg.AccrualSystemAddress = accrualSystemSddress
+	}
+
 	return cfg, nil
-}
-
-type NetAddress struct {
-	Host string
-	Port int
-}
-
-func (a *NetAddress) String() string {
-	if a.Port == 0 {
-		return DefaultServerAddress
-	}
-
-	return a.Host + ":" + strconv.Itoa(a.Port)
-}
-
-func (a *NetAddress) Set(s string) error {
-	addr := strings.Split(s, ":")
-
-	if len(addr) < 2 {
-		return errors.New("invalid address value")
-	}
-
-	p, err := strconv.Atoi(addr[1])
-	if err != nil {
-		return fmt.Errorf("failed to parse port: %w", err)
-	}
-
-	a.Host = addr[0]
-	a.Port = p
-
-	return nil
 }

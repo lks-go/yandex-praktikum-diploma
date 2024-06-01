@@ -109,9 +109,8 @@ func (a *app) Run(cfg Config) error {
 	r.Post("/api/user/balance/withdraw", h.Withdraw)
 	r.Get("/api/user/withdrawals", h.Withdrawals)
 
-	addr := cfg.NetAddress.String()
 	s := http.Server{
-		Addr:    addr,
+		Addr:    cfg.NetAddress,
 		Handler: r,
 	}
 
@@ -129,7 +128,7 @@ func (a *app) Run(cfg Config) error {
 
 	g.Go(func() error {
 		log.Info("starting http server")
-		log.Infof("listen on %s\n", addr)
+		log.Infof("listen on %s\n", cfg.NetAddress)
 		if err := s.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			return fmt.Errorf("http server failed: %w", err)
 		}
