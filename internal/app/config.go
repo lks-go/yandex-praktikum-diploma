@@ -14,13 +14,13 @@ const DefaultServerAddress = ":8000"
 type Config struct {
 	NetAddress                NetAddress
 	DatabaseDSN               string
-	HttpServerShutdownTimeout time.Duration
+	HTTPServerShutdownTimeout time.Duration
 	AccrualSystemAddress      string
 }
 
 func (a *app) BuildConfig() (Config, error) {
 	cfg := Config{
-		HttpServerShutdownTimeout: time.Second * 2,
+		HTTPServerShutdownTimeout: time.Second * 2,
 	}
 	flag.Var(&cfg.NetAddress, "a", "Net address host:port")
 	flag.StringVar(&cfg.DatabaseDSN, "d", "", "Database connection string")

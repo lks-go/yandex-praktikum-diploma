@@ -20,7 +20,7 @@ type OrderStorage interface {
 	OrderByNumber(ctx context.Context, orderNumber string) (order *Order, err error)
 	AddOrder(ctx context.Context, o *Order) (oderID string, err error)
 	UpdateOrder(ctx context.Context, o *Order) error
-	UsersOrders(ctx context.Context, userId string) ([]Order, error)
+	UsersOrders(ctx context.Context, userID string) ([]Order, error)
 }
 
 type OperationsStorage interface {

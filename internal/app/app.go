@@ -95,8 +95,7 @@ func (a *app) Run(cfg Config) error {
 
 	mw := middleware.New(authorisation)
 
-	var h HTTPHandler
-	h = handler.New(log, service)
+	var h HTTPHandler = handler.New(log, service)
 
 	r := chi.NewRouter()
 
@@ -144,7 +143,7 @@ func (a *app) Run(cfg Config) error {
 		<-ctx.Done()
 		log.Info("shutdown http server")
 
-		timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), cfg.HttpServerShutdownTimeout)
+		timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), cfg.HTTPServerShutdownTimeout)
 		defer timeoutCancel()
 
 		if err := s.Shutdown(timeoutCtx); err != nil {

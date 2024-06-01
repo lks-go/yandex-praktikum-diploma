@@ -96,10 +96,10 @@ func (s *Storage) UpdateOrder(ctx context.Context, o *service.Order) error {
 	return nil
 }
 
-func (s *Storage) UsersOrders(ctx context.Context, userId string) ([]service.Order, error) {
+func (s *Storage) UsersOrders(ctx context.Context, userID string) ([]service.Order, error) {
 	q := `SELECT id, user_id, order_number, status, accrual, uploaded_at  FROM orders WHERE user_id = $1;`
 
-	row, err := s.db.QueryContext(ctx, q, userId)
+	row, err := s.db.QueryContext(ctx, q, userID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, service.ErrNotFound
