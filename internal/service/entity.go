@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"time"
 )
 
 var (
@@ -48,7 +49,7 @@ type Order struct {
 	Number     string
 	Status     OrderStatus
 	Accrual    int
-	UploadedAt string
+	UploadedAt time.Time
 }
 
 type OrderEvent struct {
@@ -66,7 +67,7 @@ type UserBalance struct {
 type Withdrawal struct {
 	OrderNumber string
 	Amount      float64
-	ProcessedAt string
+	ProcessedAt time.Time
 }
 
 type Operation struct {

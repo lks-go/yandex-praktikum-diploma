@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -76,7 +77,7 @@ func (s *Storage) Withdrawals(ctx context.Context, userID string) ([]service.Wit
 	type withdrawalDTO struct {
 		OrderNumber string
 		Amount      float64
-		CreatedAt   string
+		CreatedAt   time.Time
 	}
 
 	withdrawals := make([]service.Withdrawal, 0)

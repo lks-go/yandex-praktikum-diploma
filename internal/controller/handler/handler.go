@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/ShiraazMoollatjie/goluhn"
 	"github.com/sirupsen/logrus"
@@ -248,7 +249,7 @@ func (h *Handler) Orders(w http.ResponseWriter, r *http.Request) {
 		order := orderDTO{
 			Number:     o.Number,
 			Status:     string(o.Status),
-			UploadedAt: o.UploadedAt,
+			UploadedAt: o.UploadedAt.Format(time.RFC3339),
 		}
 
 		if o.Accrual > 0 {
@@ -385,7 +386,7 @@ func (h *Handler) Withdrawals(w http.ResponseWriter, r *http.Request) {
 		respDTO = append(respDTO, withdrawalDTO{
 			Order:       wd.OrderNumber,
 			Sum:         wd.Amount,
-			ProcessedAt: wd.ProcessedAt,
+			ProcessedAt: wd.ProcessedAt.Format(time.RFC3339),
 		})
 	}
 

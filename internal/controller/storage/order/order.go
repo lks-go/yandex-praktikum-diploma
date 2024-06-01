@@ -114,7 +114,7 @@ func (s *Storage) UsersOrders(ctx context.Context, userId string) ([]service.Ord
 		Number     string
 		Status     string
 		Accrual    int
-		UploadedAt string
+		UploadedAt time.Time
 	}
 
 	orders := make([]service.Order, 0)
