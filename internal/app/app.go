@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/sirupsen/logrus"
@@ -65,7 +66,7 @@ func (a *app) Run(cfg Config) error {
 		return fmt.Errorf("failed to setup DB: %w", err)
 	}
 
-	authorisation := auth.New(&auth.Config{})
+	authorisation := auth.New(&auth.Config{TokenSecretKey: "test-key", TokenExpirationTime: time.Hour * 1})
 
 	userStorage := user.New(pool)
 	orderStorage := order.New(pool)

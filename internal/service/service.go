@@ -129,12 +129,7 @@ func (s *Service) AuthUser(ctx context.Context, login string, password string) (
 func (s *Service) SaveOrder(ctx context.Context, login string, orderNumber string) error {
 	user, err := s.userStorage.UserByLogin(ctx, login)
 	if err != nil {
-		switch {
-		case errors.Is(err, ErrNotFound):
-			return ErrNotFound
-		default:
-			return fmt.Errorf("failed to get user by login: %w", err)
-		}
+		return fmt.Errorf("failed to get user by login[%s]: %w", login, err)
 	}
 
 	if user == nil {

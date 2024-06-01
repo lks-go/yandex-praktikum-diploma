@@ -57,6 +57,11 @@ func (mw *Middleware) CheckAuth(next http.Handler) http.Handler {
 			return
 		}
 
+		if errors.Is(err, service.ErrTokenExpired) {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
 		if claims != nil && claims.Login == "" {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
