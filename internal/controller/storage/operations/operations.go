@@ -22,7 +22,7 @@ type Storage struct {
 }
 
 func (s *Storage) Current(ctx context.Context, userID string) (float64, error) {
-	q := `SELECT COALESCE(sum(amount), 0) FROM operations WHERE user_id = = $1`
+	q := `SELECT COALESCE(sum(amount), 0) FROM operations WHERE user_id = $1`
 
 	var amount float64
 	if err := s.db.QueryRowContext(ctx, q, userID).Scan(&amount); err != nil {
