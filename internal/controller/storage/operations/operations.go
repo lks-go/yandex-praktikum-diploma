@@ -34,7 +34,7 @@ func (s *Storage) Current(ctx context.Context, userID string) (float32, error) {
 }
 
 func (s *Storage) Withdrawn(ctx context.Context, userID string) (float32, error) {
-	q := `SELECT COALESCE(sum(amount), 0) FROM operations WHERE user_id = $1 AND amount < 0;`
+	q := `SELECT -1 * COALESCE(sum(amount), 0) FROM operations WHERE user_id = $1 AND amount < 0;`
 
 	var amount float32
 	if err := s.db.QueryRowContext(ctx, q, userID).Scan(&amount); err != nil {
