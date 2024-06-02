@@ -347,6 +347,12 @@ func (h *Handler) Withdraw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := validateWithdrawSum(reqDTO.Sum); err != nil {
+		l.Warnf("invalid withdraw sum: %s", err)
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		return
+	}
+
 	err = h.service.WithdrawBonuses(r.Context(), r.Header.Get(auth.LoginHeaderName), reqDTO.Order, reqDTO.Sum)
 	if err != nil {
 		switch {
@@ -437,6 +443,14 @@ func validateOrderNumber(orderNumber string) error {
 	err := goluhn.Validate(orderNumber)
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func validateWithdrawSum(sum float32) error {
+	if sum <= 0 {
+		return fmt.Errorf("withdraw sum must be povitive value")
 	}
 
 	return nil
