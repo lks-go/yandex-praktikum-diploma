@@ -153,7 +153,7 @@ func (s *Service) SaveOrder(ctx context.Context, login string, orderNumber strin
 	newOrder := Order{
 		UserID: user.ID,
 		Number: orderNumber,
-		Status: Registered,
+		Status: OrderStatusNew,
 	}
 
 	orderID, err := s.orderStorage.AddOrder(ctx, &newOrder)
@@ -173,6 +173,17 @@ func (s *Service) SaveOrder(ctx context.Context, login string, orderNumber strin
 func (s *Service) OrderAccrual(ctx context.Context, event OrderEvent) error {
 	needRepublish := false
 
+	order, err := s.orderStorage.OrderByNumber(ctx, event.OrderNumber)
+	if err != nil {
+		return fmt.Errorf("failed to get order [number %s]: %w", event.OrderNumber, err)
+	}
+
+	order.Status = OrderStatusProcessing
+
+	if err := s.orderStorage.UpdateOrder(ctx, order); err != nil {
+		return fmt.Errorf("failed to update order [number %s]: %w", event.OrderNumber, err)
+	}
+
 	accOrder, err := s.calculator.Accrual(ctx, event.OrderNumber)
 	if err != nil {
 		switch {
@@ -187,19 +198,16 @@ func (s *Service) OrderAccrual(ctx context.Context, event OrderEvent) error {
 		}
 	}
 
-	if accOrder == nil {
-		accOrder = &Order{
-			ID: event.OrderID,
-		}
-	} else {
-		accOrder.ID = event.OrderID
+	if accOrder != nil && !needRepublish {
+		order.Accrual = accOrder.Accrual
+		order.Status = accOrder.Status
 	}
 
 	if needRepublish {
 		switch {
 		case event.Attempt >= s.cfg.MaxRepublishCount:
 			s.log.Errorf("event republish limit is over")
-			accOrder.Status = Invalid
+			order.Status = OrderStatusInvalid
 		default:
 			go func() {
 				s.log.Printf("republishing event with order[%s], attempt %d", event.OrderNumber, event.Attempt)
@@ -212,15 +220,15 @@ func (s *Service) OrderAccrual(ctx context.Context, event OrderEvent) error {
 		}
 	}
 
-	if err := s.orderStorage.UpdateOrder(ctx, accOrder); err != nil {
-		return fmt.Errorf("failed to update order [number %s]: %w", accOrder.Number, err)
+	if err := s.orderStorage.UpdateOrder(ctx, order); err != nil {
+		return fmt.Errorf("failed to update order [number %s]: %w", order.Number, err)
 	}
 
-	if accOrder.Accrual > 0 {
+	if order.Accrual > 0 {
 		o := Operation{
-			UserID:      event.UserID,
-			OrderNumber: event.OrderNumber,
-			Amount:      accOrder.Accrual,
+			UserID:      order.UserID,
+			OrderNumber: order.Number,
+			Amount:      order.Accrual,
 		}
 		if err := s.operationsStorage.Add(ctx, &o); err != nil {
 			return fmt.Errorf("failed to add operation: %w", err)

@@ -37,10 +37,11 @@ type User struct {
 type OrderStatus string
 
 const (
-	Registered OrderStatus = "REGISTERED"
-	Invalid    OrderStatus = "INVALID"
-	Processing OrderStatus = "PROCESSING"
-	Processed  OrderStatus = "PROCESSED"
+	OrderStatusNew        OrderStatus = "NEW"
+	OrderStatusRegistered OrderStatus = "REGISTERED"
+	OrderStatusInvalid    OrderStatus = "INVALID"
+	OrderStatusProcessing OrderStatus = "PROCESSING"
+	OrderStatusProcessed  OrderStatus = "PROCESSED"
 )
 
 type Order struct {
