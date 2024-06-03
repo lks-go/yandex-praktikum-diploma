@@ -67,13 +67,13 @@ func (h *Handler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 		validationErrors = append(validationErrors, err)
 	}
 
-	if err := validatePassword(requestBody.Login); err != nil {
+	if err := validatePassword(requestBody.Password); err != nil {
 		validationErrors = append(validationErrors, err)
 	}
 
 	if len(validationErrors) > 0 {
 		for _, e := range validationErrors {
-			l.Warnf("login not valid: %s", e)
+			l.Warn(e)
 		}
 
 		w.WriteHeader(http.StatusBadRequest)
