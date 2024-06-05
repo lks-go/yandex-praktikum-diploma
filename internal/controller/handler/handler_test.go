@@ -457,8 +457,6 @@ func TestHandler_Orders(t *testing.T) {
 			w := httptest.NewRecorder()
 			h.Orders(w, tc.httpRequest())
 
-			w.Body.String()
-
 			assert.Equal(t, tc.expectedStatusCode, w.Code)
 			if tc.expectedBody == nil {
 				assert.Equal(t, "", w.Body.String())
