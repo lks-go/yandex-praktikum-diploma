@@ -15,9 +15,10 @@ import (
 	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/handler"
 	"github.com/lks-go/yandex-praktikum-diploma/internal/controller/handler/mocks"
 	"github.com/lks-go/yandex-praktikum-diploma/internal/service"
+	"github.com/lks-go/yandex-praktikum-diploma/internal/service/auth"
 )
 
-func TestRegisterUser(t *testing.T) {
+func TestHandler_RegisterUser(t *testing.T) {
 
 	serviceMock := mocks.NewService(t)
 	h := handler.New(logrus.New(), serviceMock)
@@ -114,7 +115,7 @@ func TestRegisterUser(t *testing.T) {
 
 }
 
-func TestLoginUser(t *testing.T) {
+func TestHandler_LoginUser(t *testing.T) {
 	serviceMock := mocks.NewService(t)
 	h := handler.New(logrus.New(), serviceMock)
 
@@ -221,4 +222,111 @@ func TestLoginUser(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestHandler_SaveOrder(t *testing.T) {
+	serviceMock := mocks.NewService(t)
+	h := handler.New(logrus.New(), serviceMock)
+
+	cases := []struct {
+		name               string
+		httpRequest        func() *http.Request
+		mock               func()
+		expectedStatusCode int
+	}{
+		{
+			name: "202 accepted",
+			httpRequest: func() *http.Request {
+				req := httptest.NewRequest(
+					http.MethodPost,
+					"https://test.ru/api/user/orders",
+					io.NopCloser(bytes.NewReader([]byte(`9981558796712`))),
+				)
+				req.Header.Set(auth.LoginHeaderName, "test-user")
+				return req
+			},
+			mock: func() {
+				serviceMock.On("SaveOrder", mock.Anything, "test-user", "9981558796712").
+					Return(nil).Once()
+			},
+			expectedStatusCode: http.StatusAccepted,
+		},
+		{
+			name: "422 unprocessable entity",
+			httpRequest: func() *http.Request {
+				req := httptest.NewRequest(
+					http.MethodPost,
+					"https://test.ru/api/user/orders",
+					io.NopCloser(bytes.NewReader([]byte(`998155879671223`))),
+				)
+				req.Header.Set(auth.LoginHeaderName, "test-user")
+				return req
+			},
+			mock:               func() {},
+			expectedStatusCode: http.StatusUnprocessableEntity,
+		},
+		{
+			name: "200 ok",
+			httpRequest: func() *http.Request {
+				req := httptest.NewRequest(
+					http.MethodPost,
+					"https://test.ru/api/user/orders",
+					io.NopCloser(bytes.NewReader([]byte(`9981558796712`))),
+				)
+				req.Header.Set(auth.LoginHeaderName, "test-user")
+				return req
+			},
+			mock: func() {
+				serviceMock.On("SaveOrder", mock.Anything, "test-user", "9981558796712").
+					Return(service.ErrAlreadyExists).Once()
+			},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "409 conflict",
+			httpRequest: func() *http.Request {
+				req := httptest.NewRequest(
+					http.MethodPost,
+					"https://test.ru/api/user/orders",
+					io.NopCloser(bytes.NewReader([]byte(`9981558796712`))),
+				)
+				req.Header.Set(auth.LoginHeaderName, "test-user")
+				return req
+			},
+			mock: func() {
+				serviceMock.On("SaveOrder", mock.Anything, "test-user", "9981558796712").
+					Return(service.ErrOrderConflict).Once()
+			},
+			expectedStatusCode: http.StatusConflict,
+		},
+		{
+			name: "500 internal error",
+			httpRequest: func() *http.Request {
+				req := httptest.NewRequest(
+					http.MethodPost,
+					"https://test.ru/api/user/orders",
+					io.NopCloser(bytes.NewReader([]byte(`9981558796712`))),
+				)
+				req.Header.Set(auth.LoginHeaderName, "test-user")
+				return req
+			},
+			mock: func() {
+				serviceMock.On("SaveOrder", mock.Anything, "test-user", "9981558796712").
+					Return(errors.New("any unexpected error")).Once()
+			},
+			expectedStatusCode: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.mock()
+
+			w := httptest.NewRecorder()
+			h.SaveOrder(w, tc.httpRequest())
+
+			assert.Equal(t, tc.expectedStatusCode, w.Code)
+		})
+	}
+
 }
