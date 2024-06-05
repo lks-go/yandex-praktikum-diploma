@@ -440,6 +440,10 @@ func validatePassword(pass *string) error {
 }
 
 func validateOrderNumber(orderNumber string) error {
+	if orderNumber == "" {
+		return fmt.Errorf("empty order number")
+	}
+
 	err := goluhn.Validate(orderNumber)
 	if err != nil {
 		return err

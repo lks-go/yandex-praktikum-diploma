@@ -555,3 +555,107 @@ func TestHandler_Balance(t *testing.T) {
 		})
 	}
 }
+
+func TestHandler_Withdraw(t *testing.T) {
+	serviceMock := mocks.NewService(t)
+	h := handler.New(logrus.New(), serviceMock)
+
+	cases := []struct {
+		name               string
+		httpRequest        func() *http.Request
+		mock               func()
+		expectedStatusCode int
+	}{
+		{
+			name: "200 ok",
+			httpRequest: func() *http.Request {
+				req := httptest.NewRequest(
+					http.MethodGet,
+					"https://test.ru/api/api/user/withdraw",
+					io.NopCloser(bytes.NewReader([]byte(`{"order": "9981558796712", "sum": 13.51}`))),
+				)
+				req.Header.Set(auth.LoginHeaderName, "test-user-3")
+				return req
+			},
+			mock: func() {
+				serviceMock.On("WithdrawBonuses", mock.Anything, "test-user-3", "9981558796712", float32(13.51)).
+					Return(nil).Once()
+			},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "422 unprocessable entity",
+			httpRequest: func() *http.Request {
+				req := httptest.NewRequest(
+					http.MethodGet,
+					"https://test.ru/api/api/user/withdraw",
+					io.NopCloser(bytes.NewReader([]byte(`{"order": "9981558796712"}`))),
+				)
+				req.Header.Set(auth.LoginHeaderName, "test-user-3")
+				return req
+			},
+			mock:               func() {},
+			expectedStatusCode: http.StatusUnprocessableEntity,
+		},
+		{
+			name: "422 unprocessable entity, case 2",
+			httpRequest: func() *http.Request {
+				req := httptest.NewRequest(
+					http.MethodGet,
+					"https://test.ru/api/api/user/withdraw",
+					io.NopCloser(bytes.NewReader([]byte(`{"sum": 13.51}`))),
+				)
+				req.Header.Set(auth.LoginHeaderName, "test-user-3")
+				return req
+			},
+			mock:               func() {},
+			expectedStatusCode: http.StatusUnprocessableEntity,
+		},
+		{
+			name: "402 payment required",
+			httpRequest: func() *http.Request {
+				req := httptest.NewRequest(
+					http.MethodGet,
+					"https://test.ru/api/api/user/withdraw",
+					io.NopCloser(bytes.NewReader([]byte(`{"order": "9981558796712", "sum": 1013.51}`))),
+				)
+				req.Header.Set(auth.LoginHeaderName, "test-user-3")
+				return req
+			},
+			mock: func() {
+				serviceMock.On("WithdrawBonuses", mock.Anything, "test-user-3", "9981558796712", float32(1013.51)).
+					Return(service.ErrNotEnoughBonuses).Once()
+			},
+			expectedStatusCode: http.StatusPaymentRequired,
+		},
+		{
+			name: "500 internal error",
+			httpRequest: func() *http.Request {
+				req := httptest.NewRequest(
+					http.MethodGet,
+					"https://test.ru/api/api/user/withdraw",
+					io.NopCloser(bytes.NewReader([]byte(`{"order": "9981558796712", "sum": 1013.51}`))),
+				)
+				req.Header.Set(auth.LoginHeaderName, "test-user-3")
+				return req
+			},
+			mock: func() {
+				serviceMock.On("WithdrawBonuses", mock.Anything, "test-user-3", "9981558796712", float32(1013.51)).
+					Return(errors.New("any unexpected error")).Once()
+			},
+			expectedStatusCode: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.mock()
+
+			w := httptest.NewRecorder()
+			h.Withdraw(w, tc.httpRequest())
+
+			assert.Equal(t, tc.expectedStatusCode, w.Code)
+		})
+	}
+
+}
