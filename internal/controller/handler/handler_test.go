@@ -570,7 +570,7 @@ func TestHandler_Withdraw(t *testing.T) {
 			name: "200 ok",
 			httpRequest: func() *http.Request {
 				req := httptest.NewRequest(
-					http.MethodGet,
+					http.MethodPost,
 					"https://test.ru/api/api/user/withdraw",
 					io.NopCloser(bytes.NewReader([]byte(`{"order": "9981558796712", "sum": 13.51}`))),
 				)
@@ -587,7 +587,7 @@ func TestHandler_Withdraw(t *testing.T) {
 			name: "422 unprocessable entity",
 			httpRequest: func() *http.Request {
 				req := httptest.NewRequest(
-					http.MethodGet,
+					http.MethodPost,
 					"https://test.ru/api/api/user/withdraw",
 					io.NopCloser(bytes.NewReader([]byte(`{"order": "9981558796712"}`))),
 				)
@@ -601,7 +601,7 @@ func TestHandler_Withdraw(t *testing.T) {
 			name: "422 unprocessable entity, case 2",
 			httpRequest: func() *http.Request {
 				req := httptest.NewRequest(
-					http.MethodGet,
+					http.MethodPost,
 					"https://test.ru/api/api/user/withdraw",
 					io.NopCloser(bytes.NewReader([]byte(`{"sum": 13.51}`))),
 				)
@@ -615,7 +615,7 @@ func TestHandler_Withdraw(t *testing.T) {
 			name: "402 payment required",
 			httpRequest: func() *http.Request {
 				req := httptest.NewRequest(
-					http.MethodGet,
+					http.MethodPost,
 					"https://test.ru/api/api/user/withdraw",
 					io.NopCloser(bytes.NewReader([]byte(`{"order": "9981558796712", "sum": 1013.51}`))),
 				)
@@ -632,7 +632,7 @@ func TestHandler_Withdraw(t *testing.T) {
 			name: "500 internal error",
 			httpRequest: func() *http.Request {
 				req := httptest.NewRequest(
-					http.MethodGet,
+					http.MethodPost,
 					"https://test.ru/api/api/user/withdraw",
 					io.NopCloser(bytes.NewReader([]byte(`{"order": "9981558796712", "sum": 1013.51}`))),
 				)
@@ -658,4 +658,132 @@ func TestHandler_Withdraw(t *testing.T) {
 		})
 	}
 
+}
+
+func TestHandler_Withdrawals(t *testing.T) {
+	serviceMock := mocks.NewService(t)
+	h := handler.New(logrus.New(), serviceMock)
+
+	processedAtFirst := time.Now().Add(-time.Second * 10)
+	processedAtSecond := time.Now().Add(time.Second * 20)
+
+	cases := []struct {
+		name               string
+		httpRequest        func() *http.Request
+		mock               func()
+		expectedStatusCode int
+		expectedBody       func() string
+	}{
+		{
+			name: "200 ok",
+			httpRequest: func() *http.Request {
+				req := httptest.NewRequest(
+					http.MethodGet,
+					"https://test.ru/api/api/user/withdrawals",
+					nil,
+				)
+				req.Header.Set(auth.LoginHeaderName, "test-user")
+				return req
+			},
+			mock: func() {
+				withdrawals := []service.Withdrawal{
+					{
+						OrderNumber: "9981558796712",
+						Amount:      54.22,
+						ProcessedAt: processedAtFirst,
+					},
+					{
+						OrderNumber: "9981558796713",
+						Amount:      13,
+						ProcessedAt: processedAtSecond,
+					},
+				}
+
+				serviceMock.On("Withdrawals", mock.Anything, "test-user").
+					Return(withdrawals, nil).Once()
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedBody: func() string {
+				return `[
+				{
+					"order": "9981558796712",
+					"sum": 54.22,
+					"processed_at": "` + processedAtFirst.Format(time.RFC3339) + `"
+				},
+				{
+					"order": "9981558796713",
+					"sum": 13,
+					"processed_at": "` + processedAtSecond.Format(time.RFC3339) + `"
+				}
+			]`
+			},
+		},
+		{
+			name: "204 no content",
+			httpRequest: func() *http.Request {
+				req := httptest.NewRequest(
+					http.MethodGet,
+					"https://test.ru/api/api/user/withdrawals",
+					nil,
+				)
+				req.Header.Set(auth.LoginHeaderName, "test-user")
+				return req
+			},
+			mock: func() {
+				serviceMock.On("Withdrawals", mock.Anything, "test-user").
+					Return(nil, service.ErrNotFound).Once()
+			},
+			expectedStatusCode: http.StatusNoContent,
+		},
+		{
+			name: "204 no content, case 2",
+			httpRequest: func() *http.Request {
+				req := httptest.NewRequest(
+					http.MethodGet,
+					"https://test.ru/api/api/user/withdrawals",
+					nil,
+				)
+				req.Header.Set(auth.LoginHeaderName, "test-user")
+				return req
+			},
+			mock: func() {
+				serviceMock.On("Withdrawals", mock.Anything, "test-user").
+					Return(nil, nil).Once()
+			},
+			expectedStatusCode: http.StatusNoContent,
+		},
+		{
+			name: "500 internal error",
+			httpRequest: func() *http.Request {
+				req := httptest.NewRequest(
+					http.MethodGet,
+					"https://test.ru/api/api/user/withdrawals",
+					nil,
+				)
+				req.Header.Set(auth.LoginHeaderName, "test-user")
+				return req
+			},
+			mock: func() {
+				serviceMock.On("Withdrawals", mock.Anything, "test-user").
+					Return(nil, errors.New("any unexpected error")).Once()
+			},
+			expectedStatusCode: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.mock()
+
+			w := httptest.NewRecorder()
+			h.Withdrawals(w, tc.httpRequest())
+
+			assert.Equal(t, tc.expectedStatusCode, w.Code)
+			if tc.expectedBody == nil {
+				assert.Equal(t, "", w.Body.String())
+			} else {
+				assert.JSONEq(t, tc.expectedBody(), w.Body.String())
+			}
+		})
+	}
 }
