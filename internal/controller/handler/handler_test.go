@@ -466,3 +466,92 @@ func TestHandler_Orders(t *testing.T) {
 		})
 	}
 }
+
+func TestHandler_Balance(t *testing.T) {
+	serviceMock := mocks.NewService(t)
+	h := handler.New(logrus.New(), serviceMock)
+
+	cases := []struct {
+		name               string
+		httpRequest        func() *http.Request
+		mock               func()
+		expectedStatusCode int
+		expectedBody       func() string
+	}{
+		{
+			name: "200 ок",
+			httpRequest: func() *http.Request {
+				req := httptest.NewRequest(
+					http.MethodGet,
+					"https://test.ru/api/api/user/balance",
+					nil,
+				)
+				req.Header.Set(auth.LoginHeaderName, "test-user-3")
+				return req
+			},
+			mock: func() {
+				balance := service.UserBalance{
+					Current:   548.34,
+					Withdrawn: 201.89,
+				}
+
+				serviceMock.On("UserBalance", mock.Anything, "test-user-3").
+					Return(&balance, nil).Once()
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedBody: func() string {
+				return `{"current": 548.34, "withdrawn": 201.89}`
+			},
+		},
+		{
+			name: "500 internal error",
+			httpRequest: func() *http.Request {
+				req := httptest.NewRequest(
+					http.MethodGet,
+					"https://test.ru/api/api/user/balance",
+					nil,
+				)
+				req.Header.Set(auth.LoginHeaderName, "test-user-3")
+				return req
+			},
+			mock: func() {
+				serviceMock.On("UserBalance", mock.Anything, "test-user-3").
+					Return(nil, errors.New("any unexpected error")).Once()
+			},
+			expectedStatusCode: http.StatusInternalServerError,
+		},
+		{
+			name: "500 internal error, 2 case",
+			httpRequest: func() *http.Request {
+				req := httptest.NewRequest(
+					http.MethodGet,
+					"https://test.ru/api/api/user/balance",
+					nil,
+				)
+				req.Header.Set(auth.LoginHeaderName, "test-user-3")
+				return req
+			},
+			mock: func() {
+				serviceMock.On("UserBalance", mock.Anything, "test-user-3").
+					Return(nil, nil).Once()
+			},
+			expectedStatusCode: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.mock()
+
+			w := httptest.NewRecorder()
+			h.Balance(w, tc.httpRequest())
+
+			assert.Equal(t, tc.expectedStatusCode, w.Code)
+			if tc.expectedBody == nil {
+				assert.Equal(t, "", w.Body.String())
+			} else {
+				assert.JSONEq(t, tc.expectedBody(), w.Body.String())
+			}
+		})
+	}
+}
