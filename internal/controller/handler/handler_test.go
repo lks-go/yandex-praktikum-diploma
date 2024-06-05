@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -329,4 +330,141 @@ func TestHandler_SaveOrder(t *testing.T) {
 		})
 	}
 
+}
+
+func TestHandler_Orders(t *testing.T) {
+	serviceMock := mocks.NewService(t)
+	h := handler.New(logrus.New(), serviceMock)
+	uploadedAtFirst := time.Now().Add(-time.Second * 10)
+	uploadedAtSecond := time.Now().Add(-time.Second * 20)
+
+	cases := []struct {
+		name               string
+		httpRequest        func() *http.Request
+		mock               func()
+		expectedStatusCode int
+		expectedBody       func() string
+	}{
+		{
+			name: "204 no content",
+			httpRequest: func() *http.Request {
+				req := httptest.NewRequest(
+					http.MethodGet,
+					"https://test.ru/api/api/user/orders",
+					nil,
+				)
+				req.Header.Set(auth.LoginHeaderName, "test-user-2")
+				return req
+			},
+			mock: func() {
+				serviceMock.On("OrderList", mock.Anything, "test-user-2").
+					Return(nil, service.ErrNotFound).Once()
+			},
+			expectedStatusCode: http.StatusNoContent,
+			expectedBody:       nil,
+		},
+		{
+			name: "204 no content, second case",
+			httpRequest: func() *http.Request {
+				req := httptest.NewRequest(
+					http.MethodGet,
+					"https://test.ru/api/api/user/orders",
+					nil,
+				)
+				req.Header.Set(auth.LoginHeaderName, "test-user-2")
+				return req
+			},
+			mock: func() {
+				serviceMock.On("OrderList", mock.Anything, "test-user-2").
+					Return(nil, nil).Once()
+			},
+			expectedStatusCode: http.StatusNoContent,
+			expectedBody:       nil,
+		},
+		{
+			name: "200 ok",
+			httpRequest: func() *http.Request {
+				req := httptest.NewRequest(
+					http.MethodGet,
+					"https://test.ru/api/api/user/orders",
+					nil,
+				)
+				req.Header.Set(auth.LoginHeaderName, "test-user-2")
+				return req
+			},
+			mock: func() {
+				orders := []service.Order{
+					{
+						ID:         "order-id-1",
+						UserID:     "user-id-1",
+						Number:     "9981558796712",
+						Status:     service.OrderStatusProcessing,
+						Accrual:    0,
+						UploadedAt: uploadedAtFirst,
+					},
+					{
+						ID:         "order-id-2",
+						UserID:     "user-id-3",
+						Number:     "9981558796713",
+						Status:     service.OrderStatusProcessed,
+						Accrual:    13,
+						UploadedAt: uploadedAtSecond,
+					},
+				}
+				serviceMock.On("OrderList", mock.Anything, "test-user-2").
+					Return(orders, nil).Once()
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedBody: func() string {
+				return `[
+				{
+					"number": "9981558796712",
+					"status": "` + string(service.OrderStatusProcessing) + `",
+					"uploaded_at": "` + uploadedAtFirst.Format(time.RFC3339) + `"
+				},
+				{
+					"number": "9981558796713",
+					"status": "` + string(service.OrderStatusProcessed) + `",
+					"accrual": 13,
+					"uploaded_at": "` + uploadedAtSecond.Format(time.RFC3339) + `"
+				}
+			]`
+			},
+		},
+		{
+			name: "500 internal error",
+			httpRequest: func() *http.Request {
+				req := httptest.NewRequest(
+					http.MethodGet,
+					"https://test.ru/api/api/user/orders",
+					nil,
+				)
+				req.Header.Set(auth.LoginHeaderName, "test-user-2")
+				return req
+			},
+			mock: func() {
+				serviceMock.On("OrderList", mock.Anything, "test-user-2").
+					Return(nil, errors.New("any unexpected error")).Once()
+			},
+			expectedStatusCode: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.mock()
+
+			w := httptest.NewRecorder()
+			h.Orders(w, tc.httpRequest())
+
+			w.Body.String()
+
+			assert.Equal(t, tc.expectedStatusCode, w.Code)
+			if tc.expectedBody == nil {
+				assert.Equal(t, "", w.Body.String())
+			} else {
+				assert.JSONEq(t, tc.expectedBody(), w.Body.String())
+			}
+		})
+	}
 }
