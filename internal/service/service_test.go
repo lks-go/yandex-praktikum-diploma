@@ -18,7 +18,7 @@ import (
 
 var ErrAny = errors.New("any unexpected error")
 
-type Suit struct {
+type Suite struct {
 	suite.Suite
 
 	userStorage           *mocks.UserStorage
@@ -32,7 +32,7 @@ type Suit struct {
 	serviceConfig service.Config
 }
 
-func (s *Suit) SetupTest() {
+func (s *Suite) SetupTest() {
 	s.userStorage = mocks.NewUserStorage(s.T())
 	s.orderStorage = mocks.NewOrderStorage(s.T())
 	s.operationsStorage = mocks.NewOperationsStorage(s.T())
@@ -47,7 +47,7 @@ func (s *Suit) SetupTest() {
 	}
 }
 
-func (s *Suit) TestService_RegisterUser_Positive() {
+func (s *Suite) TestService_RegisterUser_Positive() {
 	ctx := context.Background()
 	testToken := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6InRlc3RfdXNlciIsImlhdCI6MTUxNjIzOTAyMn0.YTH8MZcIu-j5Fw7fr2zi4KB52c1x0P1d2XlUJ7fak1o"
 
@@ -55,41 +55,41 @@ func (s *Suit) TestService_RegisterUser_Positive() {
 		UserStorage:  s.userStorage,
 		TokenBuilder: s.tokenBuilder,
 	}
-	service := service.New(&s.serviceConfig, &deps)
+	sv := service.New(&s.serviceConfig, &deps)
 
 	login := "test_user"
 	password := "test_password"
 
-	s.userStorage.On("AddUser", ctx, login, service.HashPassword(password)).
+	s.userStorage.On("AddUser", ctx, login, sv.HashPassword(password)).
 		Return("user-id", nil).Once()
 
 	s.tokenBuilder.On("BuildNewToken", login).Return(testToken, nil).Once()
 
-	authToken, err := service.RegisterUser(ctx, login, password)
+	authToken, err := sv.RegisterUser(ctx, login, password)
 	require.NoError(s.T(), err)
 	require.Equal(s.T(), testToken, authToken)
 }
 
-func (s *Suit) TestService_RegisterUser_NegativeAddUser() {
+func (s *Suite) TestService_RegisterUser_NegativeAddUser() {
 	ctx := context.Background()
 
 	deps := service.Deps{
 		UserStorage: s.userStorage,
 	}
-	service := service.New(&s.serviceConfig, &deps)
+	sv := service.New(&s.serviceConfig, &deps)
 
 	login := "test_user"
 	password := "test_password"
 
-	s.userStorage.On("AddUser", ctx, login, service.HashPassword(password)).
+	s.userStorage.On("AddUser", ctx, login, sv.HashPassword(password)).
 		Return("", ErrAny).Once()
 
-	authToken, err := service.RegisterUser(ctx, login, password)
+	authToken, err := sv.RegisterUser(ctx, login, password)
 	require.Error(s.T(), err)
 	require.Equal(s.T(), "", authToken)
 }
 
-func (s *Suit) TestService_RegisterUser_NegativeBuildToken() {
+func (s *Suite) TestService_RegisterUser_NegativeBuildToken() {
 	ctx := context.Background()
 
 	deps := service.Deps{
@@ -113,7 +113,7 @@ func (s *Suit) TestService_RegisterUser_NegativeBuildToken() {
 	require.Equal(s.T(), "", authToken)
 }
 
-func (s *Suit) TestService_AuthUser_Positive() {
+func (s *Suite) TestService_AuthUser_Positive() {
 	ctx := context.Background()
 	testToken := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6InRlc3RfdXNlcl8yIiwiaWF0IjoxNTE2MjM5MDIyfQ.p7EiLJUzXtKQ3zdlpfQfbsWZzVreLCsDb7sb93pPKu0"
 
@@ -138,7 +138,7 @@ func (s *Suit) TestService_AuthUser_Positive() {
 	require.Equal(s.T(), testToken, authToken)
 }
 
-func (s *Suit) TestService_AuthUser_NegativeUserByLogin() {
+func (s *Suite) TestService_AuthUser_NegativeUserByLogin() {
 	ctx := context.Background()
 
 	deps := service.Deps{
@@ -157,7 +157,7 @@ func (s *Suit) TestService_AuthUser_NegativeUserByLogin() {
 	require.Equal(s.T(), "", authToken)
 }
 
-func (s *Suit) TestService_AuthUser_NegativePasswordNotMatch() {
+func (s *Suite) TestService_AuthUser_NegativePasswordNotMatch() {
 	ctx := context.Background()
 
 	deps := service.Deps{
@@ -181,7 +181,7 @@ func (s *Suit) TestService_AuthUser_NegativePasswordNotMatch() {
 	require.Equal(s.T(), "", authToken)
 }
 
-func (s *Suit) TestService_AuthUser_NegativeBuildToken() {
+func (s *Suite) TestService_AuthUser_NegativeBuildToken() {
 	ctx := context.Background()
 
 	deps := service.Deps{
@@ -208,6 +208,77 @@ func (s *Suit) TestService_AuthUser_NegativeBuildToken() {
 
 }
 
+func (s *Suite) TestService_SaveOrder_PositiveAddOrder() {
+	ctx := context.Background()
+	userID := uuid.NewString()
+	newOrderID := uuid.NewString()
+	login := "user"
+	orderNumber := "123"
+
+	deps := service.Deps{
+		UserStorage:           s.userStorage,
+		OrderStorage:          s.orderStorage,
+		OrderProcessPublisher: s.orderProcessPublisher,
+	}
+	sv := service.New(&s.serviceConfig, &deps)
+
+	s.userStorage.On("UserByLogin", ctx, login).Return(&service.User{ID: userID, Login: login}, nil).Once()
+	s.orderStorage.On("OrderByNumber", ctx, orderNumber).Return(nil, nil).Once()
+
+	newOrder := service.Order{UserID: userID, Number: orderNumber, Status: service.OrderStatusNew}
+	s.orderStorage.On("AddOrder", ctx, &newOrder).Return(newOrderID, nil).Once()
+
+	event := service.OrderEvent{UserID: userID, OrderID: newOrderID, OrderNumber: orderNumber}
+	s.orderProcessPublisher.On("Publish", ctx, event).Once()
+
+	err := sv.SaveOrder(ctx, login, orderNumber)
+	require.NoError(s.T(), err)
+
+	// waiting for calling Publish in goroutine
+	time.Sleep(time.Millisecond * 5)
+}
+
+func (s *Suite) TestService_SaveOrder_PositiveAlreadyExists() {
+	ctx := context.Background()
+	userID := uuid.NewString()
+	login := "user"
+	orderNumber := "123"
+
+	deps := service.Deps{
+		UserStorage:           s.userStorage,
+		OrderStorage:          s.orderStorage,
+		OrderProcessPublisher: s.orderProcessPublisher,
+	}
+	sv := service.New(&s.serviceConfig, &deps)
+
+	s.userStorage.On("UserByLogin", ctx, login).Return(&service.User{ID: userID, Login: login}, nil).Once()
+	s.orderStorage.On("OrderByNumber", ctx, orderNumber).Return(&service.Order{UserID: userID}, nil).Once()
+
+	err := sv.SaveOrder(ctx, login, orderNumber)
+	require.ErrorIs(s.T(), err, service.ErrAlreadyExists)
+}
+
+func (s *Suite) TestService_SaveOrder_NegativeConflict() {
+	ctx := context.Background()
+	userID := uuid.NewString()
+	login := "user"
+	orderNumber := "123"
+
+	deps := service.Deps{
+		UserStorage:           s.userStorage,
+		OrderStorage:          s.orderStorage,
+		OrderProcessPublisher: s.orderProcessPublisher,
+	}
+	sv := service.New(&s.serviceConfig, &deps)
+
+	s.userStorage.On("UserByLogin", ctx, login).Return(&service.User{ID: userID, Login: login}, nil).Once()
+	s.orderStorage.On("OrderByNumber", ctx, orderNumber).
+		Return(&service.Order{UserID: uuid.NewString()}, nil).Once()
+
+	err := sv.SaveOrder(ctx, login, orderNumber)
+	require.ErrorIs(s.T(), err, service.ErrOrderConflict)
+}
+
 func TestService(t *testing.T) {
-	suite.Run(t, new(Suit))
+	suite.Run(t, new(Suite))
 }
