@@ -91,7 +91,7 @@ type Service struct {
 }
 
 func (s *Service) RegisterUser(ctx context.Context, login string, password string) (string, error) {
-	_, err := s.userStorage.AddUser(ctx, login, s.hashPassword(password))
+	_, err := s.userStorage.AddUser(ctx, login, s.HashPassword(password))
 	if err != nil {
 		return "", fmt.Errorf("failed to add user to storage: %w", err)
 	}
@@ -114,7 +114,7 @@ func (s *Service) AuthUser(ctx context.Context, login string, password string) (
 		return "", errors.New("something went wrong: variable 'u' must not me nil")
 	}
 
-	if u.PasswordHash != s.hashPassword(password) {
+	if u.PasswordHash != s.HashPassword(password) {
 		return "", ErrUsersPasswordNotMatch
 	}
 
@@ -317,7 +317,7 @@ func (s *Service) Withdrawals(ctx context.Context, login string) ([]Withdrawal, 
 	return withdrawals, err
 }
 
-func (s *Service) hashPassword(pass string) string {
+func (s *Service) HashPassword(pass string) string {
 	h := sha256.New()
 	h.Write([]byte(pass + s.cfg.PassHashSalt))
 	hash := h.Sum(nil)
