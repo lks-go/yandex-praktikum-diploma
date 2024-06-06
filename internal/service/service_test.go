@@ -279,6 +279,105 @@ func (s *Suite) TestService_SaveOrder_NegativeConflict() {
 	require.ErrorIs(s.T(), err, service.ErrOrderConflict)
 }
 
+func (s *Suite) TestService_OrderAccrual_Positive() {
+	ctx := context.Background()
+	userID := uuid.NewString()
+	orderID := uuid.NewString()
+	orderNumber := "123"
+
+	deps := service.Deps{
+		OrderStorage:      s.orderStorage,
+		Calculator:        s.calculator,
+		OperationsStorage: s.operationsStorage,
+	}
+	sv := service.New(&s.serviceConfig, &deps)
+
+	o := service.Order{ID: orderID, UserID: userID, Number: orderNumber, Status: service.OrderStatusNew, Accrual: 0}
+	s.orderStorage.On("OrderByNumber", ctx, orderNumber).Return(&o, nil).Once()
+
+	o.Status = service.OrderStatusProcessing
+	s.orderStorage.On("UpdateOrder", ctx, &o).Return(nil)
+
+	accO := service.Order{Status: service.OrderStatusProcessed, Accrual: 50.55}
+	s.calculator.On("Accrual", ctx, orderNumber).Return(&accO, nil).Once()
+
+	o.Accrual = accO.Accrual
+	o.Status = accO.Status
+	s.orderStorage.On("UpdateOrder", ctx, &o).Return(nil)
+
+	op := service.Operation{UserID: userID, OrderNumber: orderNumber, Amount: o.Accrual}
+	s.operationsStorage.On("Add", ctx, &op).Return(nil).Once()
+
+	err := sv.OrderAccrual(ctx, service.OrderEvent{UserID: userID, OrderID: orderID, OrderNumber: orderNumber})
+	require.NoError(s.T(), err)
+}
+
+func (s *Suite) TestService_OrderAccrual_PositiveRepublish() {
+	ctx := context.Background()
+	userID := uuid.NewString()
+	orderID := uuid.NewString()
+	orderNumber := "321"
+	baseEvent := service.OrderEvent{UserID: userID, OrderID: orderID, OrderNumber: orderNumber}
+
+	deps := service.Deps{
+		OrderStorage:          s.orderStorage,
+		Calculator:            s.calculator,
+		OperationsStorage:     s.operationsStorage,
+		OrderProcessPublisher: s.orderProcessPublisher,
+		Log:                   s.log,
+	}
+	sv := service.New(&s.serviceConfig, &deps)
+
+	o := service.Order{ID: orderID, UserID: userID, Number: orderNumber, Status: service.OrderStatusNew, Accrual: 0}
+	s.orderStorage.On("OrderByNumber", ctx, orderNumber).Return(&o, nil).Once()
+
+	o.Status = service.OrderStatusProcessing
+	s.orderStorage.On("UpdateOrder", ctx, &o).Return(nil)
+
+	s.calculator.On("Accrual", ctx, orderNumber).
+		Return(nil, service.ErrThirdPartyOrderNotRegistered).Once()
+
+	s.orderProcessPublisher.On("Publish", ctx, service.OrderEvent{
+		UserID:      baseEvent.UserID,
+		OrderID:     baseEvent.OrderID,
+		OrderNumber: baseEvent.OrderNumber,
+		Attempt:     baseEvent.Attempt + 1,
+	}).Once()
+
+	err := sv.OrderAccrual(ctx, baseEvent)
+	require.NoError(s.T(), err)
+	time.Sleep(time.Millisecond * 100)
+}
+
+func (s *Suite) TestService_OrderAccrual_NegativeStatusInvalid() {
+	ctx := context.Background()
+	userID := uuid.NewString()
+	orderID := uuid.NewString()
+	orderNumber := "123"
+
+	deps := service.Deps{
+		OrderStorage:      s.orderStorage,
+		Calculator:        s.calculator,
+		OperationsStorage: s.operationsStorage,
+		Log:               s.log,
+	}
+	sv := service.New(&s.serviceConfig, &deps)
+
+	o := service.Order{ID: orderID, UserID: userID, Number: orderNumber, Status: service.OrderStatusNew, Accrual: 0}
+	s.orderStorage.On("OrderByNumber", ctx, orderNumber).Return(&o, nil).Once()
+
+	o.Status = service.OrderStatusProcessing
+	s.orderStorage.On("UpdateOrder", ctx, &o).Return(nil)
+
+	s.calculator.On("Accrual", ctx, orderNumber).Return(nil, service.ErrThirdPartyInternal).Once()
+
+	o.Status = service.OrderStatusInvalid
+	s.orderStorage.On("UpdateOrder", ctx, &o).Return(nil)
+
+	err := sv.OrderAccrual(ctx, service.OrderEvent{UserID: userID, OrderID: orderID, OrderNumber: orderNumber, Attempt: 3})
+	require.NoError(s.T(), err)
+}
+
 func TestService(t *testing.T) {
 	suite.Run(t, new(Suite))
 }
